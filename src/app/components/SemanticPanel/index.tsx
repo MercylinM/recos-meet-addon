@@ -1,22 +1,13 @@
+import { EnrichedTranscript, TranscriptTurn } from "@/hooks/useTranscript";
 import React from "react";
 
-type EnrichedTranscript = {
-    text: string;
-    speaker_name: string;
-    analysis: {
-        summary: string;
-        semantics: string;
-        questions: string[];
-    };
-};
 
 type SemanticPanelProps = {
-    transcripts: EnrichedTranscript[];
+    transcripts: TranscriptTurn[];
 };
 
 export default function SemanticPanel({ transcripts }: SemanticPanelProps) {
-    const enrichedTranscripts = transcripts.filter(t => t.analysis);
-
+    const enrichedTranscripts = transcripts.filter(t => t.message_type === "enriched_transcript") as EnrichedTranscript[];
     return (
         <div className="space-y-4 p-4 border rounded-md bg-gray-50">
             <h2 className="text-xl font-bold">Semantic Analysis</h2>

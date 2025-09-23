@@ -1,19 +1,15 @@
+import { TranscriptTurn } from "@/hooks/useTranscript";
 import React from "react";
 
-type EnrichedTranscript = {
-    text: string;
-    speaker_name: string;
-    analysis: {
-        questions: string[];
-    };
-};
 
 type QuestionListProps = {
-    transcripts: EnrichedTranscript[];
+    transcripts: TranscriptTurn[];
 };
 
 export default function QuestionList({ transcripts }: QuestionListProps) {
-    const allQuestions = transcripts.flatMap(t => (t.analysis?.questions || []));
+    const allQuestions = transcripts
+        .filter(t => t.message_type === "enriched_transcript")
+        .flatMap(t => t.analysis?.questions || []);
 
     return (
         <div className="space-y-4 p-4 border rounded-md bg-gray-50">

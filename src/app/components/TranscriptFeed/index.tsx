@@ -1,14 +1,12 @@
+import { TranscriptTurn } from "@/hooks/useTranscript";
 import React from "react";
 
-type EnrichedTranscript = {
-    text: string;
-    speaker_name: string;
-    analysis: unknown; 
-};
 
 type TranscriptFeedProps = {
-    transcripts: EnrichedTranscript[];
+    transcripts: TranscriptTurn[];
 };
+
+
 
 export default function TranscriptFeed({ transcripts }: TranscriptFeedProps) {
     return (
