@@ -1,17 +1,28 @@
-type Transcript = {
+import React from "react";
+
+type EnrichedTranscript = {
     text: string;
     speaker_name: string;
+    analysis: unknown; 
 };
 
-export default function TranscriptFeed({ transcripts }: { transcripts: Transcript[] }) {
+type TranscriptFeedProps = {
+    transcripts: EnrichedTranscript[];
+};
+
+export default function TranscriptFeed({ transcripts }: TranscriptFeedProps) {
     return (
-        <div className="p-4 border rounded-lg h-[70vh] overflow-y-auto bg-white shadow">
-            {transcripts.map((t, i) => (
-                <p key={i} className="mb-2">
-                    <span className="font-semibold">{t.speaker_name}: </span>
-                    {t.text}
-                </p>
-            ))}
+        <div className="space-y-4 h-[60vh] overflow-y-auto p-4 border rounded-md bg-gray-50">
+            {transcripts.length === 0 ? (
+                <p className="text-gray-500">No transcript available yet. Start speaking to see it here.</p>
+            ) : (
+                transcripts.map((turn, index) => (
+                    <div key={index} className="bg-white p-3 rounded-lg shadow-sm">
+                        <p className="font-semibold text-blue-600">{turn.speaker_name}:</p>
+                        <p className="text-gray-800">{turn.text}</p>
+                    </div>
+                ))
+            )}
         </div>
     );
 }
