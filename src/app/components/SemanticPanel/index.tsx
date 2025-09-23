@@ -10,9 +10,9 @@ export default function SemanticPanel({ transcripts }: SemanticPanelProps) {
     const enrichedTranscripts = transcripts.filter(t => t.message_type === "enriched_transcript") as EnrichedTranscript[];
     return (
         <div className="space-y-4 p-4 border rounded-md bg-gray-50">
-            <h2 className="text-xl font-bold">Semantic Analysis</h2>
+            <h2 className="text-xl text-[#141244] font-bold">Semantic Analysis</h2>
             {enrichedTranscripts.length === 0 ? (
-                <p className="text-gray-500">Analysis will appear here after a full conversation turn is completed.</p>
+                <p className="text-gray-500">Analysis...</p>
             ) : (
                 enrichedTranscripts.map((turn, index) => (
                     <div key={index} className="bg-white p-3 rounded-lg shadow-sm">

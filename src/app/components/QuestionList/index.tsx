@@ -13,9 +13,9 @@ export default function QuestionList({ transcripts }: QuestionListProps) {
 
     return (
         <div className="space-y-4 p-4 border rounded-md bg-gray-50">
-            <h2 className="text-xl font-bold">Identified Questions</h2>
+            <h2 className="text-xl text-[#141244] font-bold">Questions</h2>
             {allQuestions.length === 0 ? (
-                <p className="text-gray-500">Questions will be listed here as they are asked.</p>
+                <p className="text-gray-500">Questions...</p>
             ) : (
                 <ul className="list-disc list-inside space-y-2">
                     {allQuestions.map((question, index) => (

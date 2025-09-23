@@ -14,12 +14,10 @@ export default function RecruiterDashboard() {
                 <h1 className="text-2xl font-bold">Live Transcript</h1>
                 <p className="text-sm text-gray-500">Status: {status}</p>
                 <TranscriptFeed transcripts={transcripts} />
-            </section>
 
-            <aside className="space-y-6">
                 <SemanticPanel transcripts={transcripts} />
                 <QuestionList transcripts={transcripts} />
-            </aside>
+            </section>
         </main>
     );
 }
