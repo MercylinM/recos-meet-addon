@@ -1,4 +1,4 @@
-import RecruiterDashboard from "./recruiter/page";
+import RecruiterDashboard from "./components/audio-processor/page";
 
 export default function Home() {
   return (

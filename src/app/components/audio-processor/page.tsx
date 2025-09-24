@@ -1,9 +1,9 @@
 "use client";
 
 import { useTranscript } from "@/hooks/useTranscript";
-import TranscriptFeed from "../components/TranscriptFeed";
-import SemanticPanel from "../components/SemanticPanel";
-import QuestionList from "../components/QuestionList";
+import TranscriptFeed from "../TranscriptFeed";
+import SemanticPanel from "../SemanticPanel";
+import QuestionList from "../QuestionList";
 
 export default function RecruiterDashboard() {
     const { transcripts, status } = useTranscript();
