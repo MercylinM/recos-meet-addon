@@ -39,7 +39,6 @@ export default function SidePanel() {
                 setSidePanelClient(client);
                 setStatus('Addon session initialized');
 
-                // Set up event listeners using correct event names
                 client.on('frameToFrameMessage', (event) => {
                     console.log('Frame to frame message:', event);
                 });
@@ -53,7 +52,6 @@ export default function SidePanel() {
         initializeAddon();
     }, []);
 
-    // Connect to backend WebSocket and return a promise that resolves on open
     const connectToBackend = () => {
         if (wsPromiseRef.current) return wsPromiseRef.current;
 
@@ -116,7 +114,8 @@ export default function SidePanel() {
 
                 wsRef.current.onerror = (error) => {
                     console.error('WebSocket error:', error);
-                    setStatus('Backend connection error');
+                    setStatus('Backend connection error'); client.on('frameToFrameMessage', (event) => {
+
                     wsRef.current?.close();
                     reject(error);
                 };
@@ -138,8 +137,6 @@ export default function SidePanel() {
         try {
             await connectToBackend();
 
-            // Since we can't directly access the audio stream from Meet,
-            // we'll use the browser's microphone as a fallback
             setStatus('Requesting microphone access...');
 
             try {
@@ -151,7 +148,6 @@ export default function SidePanel() {
                     }
                 });
 
-                // Clean up the stream immediately since we can't use it for Meet audio
                 stream.getTracks().forEach(track => track.stop());
 
                 setIsStreaming(true);
@@ -161,7 +157,6 @@ export default function SidePanel() {
                 console.error('Microphone access error:', micError);
                 setStatus('Microphone access denied');
 
-                // Fallback to meeting info
                 const meetingInfo = await sidePanelClient.getMeetingInfo();
                 console.log('Meeting info:', meetingInfo);
                 setStatus(`Connected to meeting: ${meetingInfo.meetingId || 'Unknown'}`);
@@ -183,7 +178,6 @@ export default function SidePanel() {
             throw new Error('Side Panel is not yet initialized!');
         }
 
-        // Create an empty ActivityStartingState object
         const activityStartingState = {};
 
         await sidePanelClient.startActivity(activityStartingState);
