@@ -190,7 +190,6 @@ export default function SidePanel() {
         return wsPromiseRef.current;
     };
 
-    // Start streaming (connect WebSocket)
     const startStreaming = async () => {
         if (!sidePanelClient) {
             setStatus('Side panel client not initialized');
@@ -209,13 +208,11 @@ export default function SidePanel() {
         }
     };
 
-    // Stop streaming
     const stopStreaming = () => {
         setIsStreaming(false);
         setStatus('Disconnected from backend');
     };
 
-    // Start SoxClient with selected device
     const startSoxClient = async () => {
         setLoading(true);
         try {
@@ -243,7 +240,6 @@ export default function SidePanel() {
         }
     };
 
-    // Stop SoxClient
     const stopSoxClient = async () => {
         setLoading(true);
         try {
@@ -304,7 +300,7 @@ export default function SidePanel() {
     return (
         <div className="p-6 font-sans">
             <h1 className="text-2xl font-bold mb-4">Meet Audio Streamer</h1>
-            <div className="mb-6 p-4 bg-gray-100 rounded-lg">
+            <div className="mb-6 p-4 text-black bg-gray-100 rounded-lg">
                 <p>
                     <strong>Status:</strong> {status}
                 </p>
