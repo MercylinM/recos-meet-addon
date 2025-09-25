@@ -368,7 +368,7 @@ export default function SidePanel() {
                         id="deviceSelect"
                         value={selectedDevice}
                         onChange={(e) => setSelectedDevice(e.target.value)}
-                        className="w-full p-2 border border-yellow-300 rounded bg-white"
+                        className="w-full p-2 border border-yellow-300 text-black rounded bg-white"
                         disabled={loading || soxStatus.running}
                     >
                         {audioDevices.map((device) => (
