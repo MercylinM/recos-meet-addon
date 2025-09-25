@@ -114,9 +114,10 @@ export default function SidePanel() {
 
                 wsRef.current.onerror = (error) => {
                     console.error('WebSocket error:', error);
-                    setStatus('Backend connection error'); client.on('frameToFrameMessage', (event) => {
-
-                    wsRef.current?.close();
+                    setStatus('Backend connection error');
+                    if (wsRef.current) {
+                        wsRef.current.close();
+                    }
                     reject(error);
                 };
             } catch (error) {
