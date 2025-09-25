@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        body {
+            width: 300px;
+            font-family: Arial, sans-serif;
+            padding: 10px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        #startBtn {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        #stopBtn {
+            background-color: #f44336;
+            color: white;
+        }
+
+        #status {
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .status-inactive {
+            background-color: #f8f9fa;
+            color: #6c757d;
+        }
+
+        .status-active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .backend-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+
+        input {
+            width: 100%;
+            padding: 6px;
+            margin-bottom: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h3>Meet Audio Capture</h3>
+
+        <div id="status" class="status-inactive">Inactive</div>
+
+        <button id="startBtn">Start Capture</button>
+        <button id="stopBtn" disabled>Stop Capture</button>
+
+        <div class="backend-section">
+            <label for="backendUrl">Backend URL:</label>
+            <input type="text" id="backendUrl" placeholder="ws://backendUrl/ws/audio"
+                value="wss://recos-add-on-backend.onrender.com/ws/audio">
+
+            <button id="saveSettings">Save Settings</button>
+            <div id="settingsStatus" style="font-size: 12px; color: #666; margin-top: 5px;"></div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>

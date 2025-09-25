@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "extension:dev": "next dev & npm run extension:watch",
+    "extension:watch": "nodemon --watch public/extension --exec 'echo \"Extension files changed. Reload the extension in chrome://extensions/\"'"
   },
   "dependencies": {
     "@googleworkspace/meet-addons": "^1.2.0",
