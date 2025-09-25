@@ -7,7 +7,6 @@ import {
     AddonSession,
 } from '@googleworkspace/meet-addons/meet.addons';
 
-// Define TypeScript interfaces for our data structures
 interface GeminiAnalysis {
     summary: string;
     semantics: string;
@@ -34,10 +33,8 @@ export default function SidePanel() {
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const audioWorkletNodeRef = useRef<AudioWorkletNode | null>(null);
 
-    // Create a new promise to handle the WebSocket connection state
     const wsPromiseRef = useRef<Promise<void> | null>(null);
 
-    // Initialize the add-on session
     useEffect(() => {
         const initializeAddon = async () => {
             try {
@@ -76,19 +73,16 @@ export default function SidePanel() {
                     try {
                         const data = JSON.parse(event.data as string);
 
-                        // Handle different message types
                         if (data.message_type === 'enriched_transcript') {
                             const newTranscript: Transcript = {
                                 speaker: data.speaker_name,
                                 text: data.transcript,
                                 analysis: data.analysis,
                                 timestamp: Date.now(),
-                                isFinal: true // Correctly mark as final
+                                isFinal: true 
                             };
 
-                            // Update the last interim or add a new final transcript
                             setTranscripts(prev => {
-                                // If the last transcript is interim, replace it. Otherwise, add a new one.
                                 if (prev.length > 0 && !prev[0].isFinal) {
                                     return [newTranscript, ...prev.slice(1)];
                                 }
@@ -103,7 +97,6 @@ export default function SidePanel() {
                                 isFinal: false,
                             };
 
-                            // Update the first element if it's an interim transcript, otherwise add a new one
                             setTranscripts(prev => {
                                 if (prev.length > 0 && !prev[0].isFinal) {
                                     return [interimTranscript, ...prev.slice(1)];
@@ -125,7 +118,7 @@ export default function SidePanel() {
                 wsRef.current.onerror = (error) => {
                     console.error('WebSocket error:', error);
                     setStatus('Backend connection error');
-                    wsRef.current?.close(); // Close to trigger onclose handler
+                    wsRef.current?.close();
                     reject(error);
                 };
             } catch (error) {
@@ -137,7 +130,6 @@ export default function SidePanel() {
         return wsPromiseRef.current;
     };
 
-    // Start streaming audio to backend
     const startStreaming = async () => {
         if (!addonSession) {
             setStatus('Addon session not initialized');
@@ -145,7 +137,7 @@ export default function SidePanel() {
         }
 
         try {
-            await connectToBackend(); // Await the WebSocket connection
+            await connectToBackend(); 
 
             setStatus('Requesting audio access...');
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -158,15 +150,12 @@ export default function SidePanel() {
             mediaStreamRef.current = stream;
             audioContextRef.current = new window.AudioContext();
 
-            // Register the AudioWorklet processor
-            await audioContextRef.current.audioWorklet.addModule('/audio-processor.js');
+            await audioContextRef.current.audioWorklet.addModule('./components/AudioProcessor');
 
             const source = audioContextRef.current.createMediaStreamSource(stream);
 
-            // Create the AudioWorkletNode
             audioWorkletNodeRef.current = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
 
-            // Listen for messages from the AudioWorklet
             audioWorkletNodeRef.current.port.onmessage = (event) => {
                 if (event.data.type === 'audioData') {
                     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -175,7 +164,6 @@ export default function SidePanel() {
                 }
             };
 
-            // Connect the audio nodes
             source.connect(audioWorkletNodeRef.current);
             audioWorkletNodeRef.current.connect(audioContextRef.current.destination);
 

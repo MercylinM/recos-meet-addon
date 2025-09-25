@@ -7,9 +7,21 @@ class AudioProcessor extends AudioWorkletProcessor {
     }
 
     process(inputs, outputs, parameters) {
-        const inputChannel = inputs[0][0];
+        const inputChannel = inputs[0] && inputs[0][0];
 
         if (!inputChannel) {
+            // If there's data in the buffer when input ends, send it
+            if (this.bufferIndex > 0) {
+                const partialBuffer = this.buffer.slice(0, this.bufferIndex);
+                const pcmBuffer = this.convertFloatTo16BitPCM(partialBuffer);
+                try {
+                    this.port.postMessage({ type: 'audioData', buffer: pcmBuffer }, [pcmBuffer]);
+                } catch (error) {
+                    console.error('Error posting audio data:', error);
+                    this.port.postMessage({ type: 'audioData', buffer: pcmBuffer });
+                }
+                this.bufferIndex = 0;
+            }
             return true;
         }
 
@@ -20,7 +32,12 @@ class AudioProcessor extends AudioWorkletProcessor {
             if (this.bufferIndex === this.bufferSize) {
                 // Convert float to 16-bit PCM and send
                 const pcmBuffer = this.convertFloatTo16BitPCM(this.buffer);
-                this.port.postMessage({ type: 'audioData', buffer: pcmBuffer }, [pcmBuffer]);
+                try {
+                    this.port.postMessage({ type: 'audioData', buffer: pcmBuffer }, [pcmBuffer]);
+                } catch (error) {
+                    console.error('Error posting audio data:', error);
+                    this.port.postMessage({ type: 'audioData', buffer: pcmBuffer });
+                }
                 this.bufferIndex = 0;
             }
         }
@@ -36,7 +53,7 @@ class AudioProcessor extends AudioWorkletProcessor {
         for (let i = 0; i < float32Array.length; i++, offset += 2) {
             let s = Math.max(-1, Math.min(1, float32Array[i]));
             s = s < 0 ? s * 0x8000 : s * 0x7FFF;
-            view.setInt16(offset, s, true);
+            view.setInt16(offset, s, true); // little-endian
         }
         return buffer;
     }
