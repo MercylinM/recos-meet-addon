@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react';
 import {
     meet,
     MeetSidePanelClient,
-    AddonSession,
 } from '@googleworkspace/meet-addons/meet.addons';
 
 interface GeminiAnalysis {
@@ -23,16 +22,11 @@ interface Transcript {
 
 export default function SidePanel() {
     const [sidePanelClient, setSidePanelClient] = useState<MeetSidePanelClient>();
-    const [addonSession, setAddonSession] = useState<AddonSession>();
     const [isConnected, setIsConnected] = useState(false);
     const [isStreaming, setIsStreaming] = useState(false);
     const [status, setStatus] = useState('Initializing...');
     const [transcripts, setTranscripts] = useState<Transcript[]>([]);
     const wsRef = useRef<WebSocket | null>(null);
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const mediaStreamRef = useRef<MediaStream | null>(null);
-    const audioWorkletNodeRef = useRef<AudioWorkletNode | null>(null);
-
     const wsPromiseRef = useRef<Promise<void> | null>(null);
 
     useEffect(() => {
@@ -42,9 +36,14 @@ export default function SidePanel() {
                     cloudProjectNumber: process.env.NEXT_PUBLIC_CLOUD_PROJECT_NUMBER || '',
                 });
                 const client = await session.createSidePanelClient();
-                setAddonSession(session);
                 setSidePanelClient(client);
                 setStatus('Addon session initialized');
+
+                // Set up event listeners using correct event names
+                client.on('frameToFrameMessage', (event) => {
+                    console.log('Frame to frame message:', event);
+                });
+
             } catch (error) {
                 console.error('Error initializing addon:', error);
                 setStatus('Failed to initialize addon');
@@ -79,7 +78,7 @@ export default function SidePanel() {
                                 text: data.transcript,
                                 analysis: data.analysis,
                                 timestamp: Date.now(),
-                                isFinal: true 
+                                isFinal: true
                             };
 
                             setTranscripts(prev => {
@@ -131,83 +130,79 @@ export default function SidePanel() {
     };
 
     const startStreaming = async () => {
-        if (!addonSession) {
-            setStatus('Addon session not initialized');
+        if (!sidePanelClient) {
+            setStatus('Side panel client not initialized');
             return;
         }
 
         try {
-            await connectToBackend(); 
+            await connectToBackend();
 
-            setStatus('Requesting audio access...');
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Since we can't directly access the audio stream from Meet,
+            // we'll use the browser's microphone as a fallback
+            setStatus('Requesting microphone access...');
 
-            if (!stream) {
-                setStatus('Failed to get audio stream');
-                return;
-            }
-
-            mediaStreamRef.current = stream;
-            audioContextRef.current = new window.AudioContext();
-
-            await audioContextRef.current.audioWorklet.addModule('./components/AudioProcessor');
-
-            const source = audioContextRef.current.createMediaStreamSource(stream);
-
-            audioWorkletNodeRef.current = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
-
-            audioWorkletNodeRef.current.port.onmessage = (event) => {
-                if (event.data.type === 'audioData') {
-                    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                        wsRef.current.send(event.data.buffer);
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
                     }
-                }
-            };
+                });
 
-            source.connect(audioWorkletNodeRef.current);
-            audioWorkletNodeRef.current.connect(audioContextRef.current.destination);
+                // Clean up the stream immediately since we can't use it for Meet audio
+                stream.getTracks().forEach(track => track.stop());
 
-            setIsStreaming(true);
-            setStatus('Streaming audio to backend');
+                setIsStreaming(true);
+                setStatus('Microphone access granted (note: this captures your microphone, not Meet audio)');
+
+            } catch (micError) {
+                console.error('Microphone access error:', micError);
+                setStatus('Microphone access denied');
+
+                // Fallback to meeting info
+                const meetingInfo = await sidePanelClient.getMeetingInfo();
+                console.log('Meeting info:', meetingInfo);
+                setStatus(`Connected to meeting: ${meetingInfo.meetingId || 'Unknown'}`);
+            }
 
         } catch (error) {
             console.error('Error starting stream:', error);
-            setStatus('Failed to start streaming');
+            setStatus(`Failed to start streaming: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     };
 
     const stopStreaming = () => {
-        if (audioWorkletNodeRef.current) {
-            audioWorkletNodeRef.current.disconnect();
-            audioWorkletNodeRef.current = null;
-        }
-
-        if (mediaStreamRef.current) {
-            mediaStreamRef.current.getTracks().forEach(track => track.stop());
-            mediaStreamRef.current = null;
-        }
-
-        if (audioContextRef.current) {
-            audioContextRef.current.close();
-            audioContextRef.current = null;
-        }
-
         setIsStreaming(false);
         setStatus('Streaming stopped');
-
-        if (wsRef.current) {
-            wsRef.current.close();
-            wsRef.current = null;
-        }
     };
 
     const startActivity = async () => {
         if (!sidePanelClient) {
             throw new Error('Side Panel is not yet initialized!');
         }
-        await sidePanelClient.startActivity({
-            mainStageUrl: `${window.location.origin}/mainstage`
-        });
+
+        // Create an empty ActivityStartingState object
+        const activityStartingState = {};
+
+        await sidePanelClient.startActivity(activityStartingState);
+    };
+
+    const getMeetingInfo = async () => {
+        if (!sidePanelClient) {
+            setStatus('Side panel client not initialized');
+            return;
+        }
+
+        try {
+            const meetingInfo = await sidePanelClient.getMeetingInfo();
+            console.log('Meeting info:', meetingInfo);
+            setStatus(`Meeting ID: ${meetingInfo.meetingId || 'Unknown'}`);
+        } catch (error) {
+            console.error('Error getting meeting info:', error);
+            setStatus('Failed to get meeting info');
+        }
     };
 
     return (
@@ -218,6 +213,7 @@ export default function SidePanel() {
                 <p><strong>Status:</strong> {status}</p>
                 <p><strong>Backend:</strong> {isConnected ? 'Connected' : 'Disconnected'}</p>
                 <p><strong>Streaming:</strong> {isStreaming ? 'Active' : 'Inactive'}</p>
+                <p><strong>Side Panel Client:</strong> {sidePanelClient ? 'Ready' : 'Not initialized'}</p>
             </div>
 
             <div className="flex flex-wrap gap-4 mb-6">
@@ -243,6 +239,21 @@ export default function SidePanel() {
                 >
                     Open in Main Stage
                 </button>
+
+                <button
+                    onClick={getMeetingInfo}
+                    className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
+                >
+                    Get Meeting Info
+                </button>
+            </div>
+
+            <div className="mb-6 p-4 bg-yellow-50 rounded-lg">
+                <h3 className="font-bold text-yellow-800 mb-2">Important Note</h3>
+                <p className="text-yellow-700">
+                    The Google Meet Add-ons API does not currently provide direct access to the meeting&apos;s audio stream.
+                    This add-on can access meeting information and start activities, but cannot directly capture audio from the meeting.
+                </p>
             </div>
 
             <div>
@@ -254,8 +265,7 @@ export default function SidePanel() {
                         transcripts.map((transcript, index) => (
                             <div
                                 key={index}
-                                className={`mb-4 p-3 rounded-lg ${transcript.isFinal ? 'bg-gray-50' : 'bg-yellow-50'
-                                    }`}
+                                className={`mb-4 p-3 rounded-lg ${transcript.isFinal ? 'bg-gray-50' : 'bg-yellow-50'}`}
                             >
                                 <div className="font-bold text-blue-600">
                                     {transcript.speaker}:
