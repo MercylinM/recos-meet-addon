@@ -130,7 +130,7 @@ export default function SidePanel() {
 
     const wsRef = useRef<WebSocket | null>(null);
     const wsPromiseRef = useRef<Promise<void> | null>(null);
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://recos-add-on-backend.onrender.com';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://add-on-backend.onrender.com';
 
     useEffect(() => {
         const initializeAddon = async () => {
