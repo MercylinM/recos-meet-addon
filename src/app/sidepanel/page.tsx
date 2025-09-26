@@ -32,11 +32,91 @@ interface AudioDevice {
     description: string;
 }
 
+const AIOrb = ({ isActive, size = "w-4 h-4" }: { isActive: boolean; size?: string }) => (
+    <div className={`${size} rounded-full bg-gradient-to-r from-[#803ceb] to-[#a855f7] ${isActive ? 'animate-pulse shadow-lg shadow-purple-400/50' : 'opacity-50'
+        } transition-all duration-300`}>
+        <div className="w-full h-full rounded-full bg-gradient-to-r from-[#803ceb] to-[#a855f7] animate-spin opacity-75"></div>
+    </div>
+);
+
+const StatusIndicator = ({ status, isConnected }: { status: string; isConnected: boolean }) => (
+    <div className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-[#141244]/40 to-[#803ceb]/20 backdrop-blur-sm border border-[#803ceb]/30">
+        <AIOrb isActive={isConnected} size="w-3 h-3" />
+        <div className="flex-1">
+            <div className="text-xs text-[#803ceb] font-medium uppercase tracking-wide">Connection Status</div>
+            <div className="text-white/90 text-sm">{status}</div>
+        </div>
+    </div>
+);
+
+const Button = ({
+    onClick,
+    children,
+    variant = "primary",
+    disabled = false,
+    loading = false,
+    className = ""
+}: {
+    onClick: () => void;
+    children: React.ReactNode;
+    variant?: "primary" | "secondary" | "danger" | "success";
+    disabled?: boolean;
+    loading?: boolean;
+    className?: string;
+}) => {
+    const baseClasses = "relative px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:scale-100 disabled:opacity-50 disabled:cursor-not-allowed";
+
+    const variants = {
+        primary: "bg-gradient-to-r from-[#803ceb] to-[#a855f7] hover:from-[#7c3aed] hover:to-[#9333ea] text-white shadow-lg shadow-[#803ceb]/30 hover:shadow-[#803ceb]/50",
+        secondary: "bg-gradient-to-r from-[#141244] to-[#1e1065] hover:from-[#1a1458] hover:to-[#2d1b69] text-white border border-[#803ceb]/30 hover:border-[#803ceb]/50",
+        danger: "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white shadow-lg shadow-red-600/30",
+        success: "bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg shadow-emerald-600/30"
+    };
+
+    return (
+        <button
+            onClick={onClick}
+            disabled={disabled || loading}
+            className={`${baseClasses} ${variants[variant]} ${className}`}
+        >
+            {loading && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <AIOrb isActive={true} size="w-5 h-5" />
+                </div>
+            )}
+            <span className={loading ? "opacity-0" : ""}>{children}</span>
+        </button>
+    );
+};
+
+const Card = ({ title, children, className = "", glowing = false }: {
+    title: string;
+    children: React.ReactNode;
+    className?: string;
+    glowing?: boolean;
+}) => (
+    <div className={`relative p-6 rounded-2xl bg-gradient-to-br from-[#141244]/60 to-[#1a1458]/40 backdrop-blur-md border ${glowing
+            ? 'border-[#803ceb]/50 shadow-2xl shadow-[#803ceb]/20'
+            : 'border-[#803ceb]/20'
+        } transition-all duration-500 ${className}`}>
+        {glowing && (
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#803ceb]/10 to-transparent animate-pulse"></div>
+        )}
+        <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-4">
+                <AIOrb isActive={glowing} size="w-4 h-4" />
+                <h3 className="text-lg font-semibold text-white">{title}</h3>
+            </div>
+            {children}
+        </div>
+    </div>
+);
+
 export default function SidePanel() {
     const [sidePanelClient, setSidePanelClient] = useState<MeetSidePanelClient>();
     const [isConnected, setIsConnected] = useState(false);
     const [isStreaming, setIsStreaming] = useState(false);
-    const [status, setStatus] = useState('Initializing...');
+    const [status, setStatus] = useState('Initializing networks...');
     const [transcripts, setTranscripts] = useState<Transcript[]>([]);
     const [soxStatus, setSoxStatus] = useState<SoxStatus>({
         running: false,
@@ -50,9 +130,7 @@ export default function SidePanel() {
 
     const wsRef = useRef<WebSocket | null>(null);
     const wsPromiseRef = useRef<Promise<void> | null>(null);
-    const backendUrl =
-        process.env.NEXT_PUBLIC_BACKEND_URL ||
-        'https://recos-add-on-backend.onrender.com';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://recos-add-on-backend.onrender.com';
 
     useEffect(() => {
         const initializeAddon = async () => {
@@ -62,15 +140,14 @@ export default function SidePanel() {
                 });
                 const client = await session.createSidePanelClient();
                 setSidePanelClient(client);
-                setStatus('Addon session initialized');
+                setStatus('Connected');
 
-                // Example event listener on client if needed
                 client.on('frameToFrameMessage', (event) => {
                     console.log('Frame to frame message:', event);
                 });
             } catch (error) {
                 console.error('Error initializing addon:', error);
-                setStatus('Failed to initialize addon');
+                setStatus('Connection initialization failed');
             }
         };
 
@@ -116,7 +193,6 @@ export default function SidePanel() {
         }
     }, [isConnected, fetchSoxStatus, fetchAudioDevices]);
 
-
     const connectToBackend = () => {
         if (wsPromiseRef.current) return wsPromiseRef.current;
 
@@ -126,7 +202,7 @@ export default function SidePanel() {
 
                 wsRef.current.onopen = () => {
                     setIsConnected(true);
-                    setStatus('Connected to backend');
+                    setStatus('Connection established');
                     resolve();
                 };
 
@@ -171,19 +247,19 @@ export default function SidePanel() {
 
                 wsRef.current.onclose = () => {
                     setIsConnected(false);
-                    setStatus('Disconnected from backend');
+                    setStatus('Disconnected');
                     wsPromiseRef.current = null;
                 };
 
                 wsRef.current.onerror = (error) => {
                     console.error('WebSocket error:', error);
-                    setStatus('Backend connection error');
+                    setStatus('Connection error');
                     wsRef.current?.close();
                     reject(error);
                 };
             } catch (error) {
                 console.error('Error connecting to backend:', error);
-                setStatus('Failed to connect to backend');
+                setStatus('Failed to establish connection');
                 reject(error);
             }
         });
@@ -198,19 +274,16 @@ export default function SidePanel() {
         try {
             await connectToBackend();
             setIsStreaming(true);
-            setStatus('Streaming to backend');
+            setStatus('Streaming to audio processor');
         } catch (error) {
             console.error('Error starting stream:', error);
-            setStatus(
-                `Failed to connect to backend: ${error instanceof Error ? error.message : 'Unknown error'
-                }`
-            );
+            setStatus(`Failed to connect: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     };
 
     const stopStreaming = () => {
         setIsStreaming(false);
-        setStatus('Disconnected from backend');
+        setStatus('Audio stream terminated');
     };
 
     const startSoxClient = async () => {
@@ -225,16 +298,14 @@ export default function SidePanel() {
             const data = await response.json();
 
             if (data.success) {
-                setStatus(`SoxClient started (PID: ${data.pid})`);
+                setStatus(`Audio processor activated (PID: ${data.pid})`);
                 setTimeout(() => fetchSoxStatus(), 2000);
             } else {
-                setStatus(`Failed to start SoxClient: ${data.message}`);
+                setStatus(`Failed to activate processor: ${data.message}`);
             }
         } catch (error) {
             console.error('Error starting SoxClient:', error);
-            setStatus(
-                `Error starting SoxClient: ${error instanceof Error ? error.message : 'Unknown error'}`
-            );
+            setStatus(`Processor activation error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
             setLoading(false);
         }
@@ -251,16 +322,14 @@ export default function SidePanel() {
             const data = await response.json();
 
             if (data.success) {
-                setStatus('SoxClient stopped');
+                setStatus('Audio processor deactivated');
                 fetchSoxStatus();
             } else {
-                setStatus(`Failed to stop SoxClient: ${data.message}`);
+                setStatus(`Failed to deactivate processor: ${data.message}`);
             }
         } catch (error) {
             console.error('Error stopping SoxClient:', error);
-            setStatus(
-                `Error stopping SoxClient: ${error instanceof Error ? error.message : 'Unknown error'}`
-            );
+            setStatus(`Processor deactivation error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
             setLoading(false);
         }
@@ -284,10 +353,10 @@ export default function SidePanel() {
         try {
             const meetingInfo = await sidePanelClient.getMeetingInfo();
             console.log('Meeting info:', meetingInfo);
-            setStatus(`Meeting ID: ${meetingInfo.meetingId || 'Unknown'}`);
+            setStatus(`Meeting Details: ${meetingInfo.meetingId || 'Unknown'}`);
         } catch (error) {
             console.error('Error getting meeting info:', error);
-            setStatus('Failed to get meeting info');
+            setStatus('Failed to access meeting Details');
         }
     };
 
@@ -298,172 +367,199 @@ export default function SidePanel() {
     };
 
     return (
-        <div className="p-6 font-sans">
-            <h1 className="text-2xl font-bold mb-4">Meet Audio Streamer</h1>
-            <div className="mb-6 p-4 text-black bg-gray-100 rounded-lg">
-                <p>
-                    <strong>Status:</strong> {status}
-                </p>
-                <p>
-                    <strong>Backend:</strong> {isConnected ? 'Connected' : 'Disconnected'}
-                </p>
-                <p>
-                    <strong>Streaming:</strong> {isStreaming ? 'Active' : 'Inactive'}
-                </p>
-                <p>
-                    <strong>SoxClient:</strong>{' '}
-                    {soxStatus.running
-                        ? `Running (PID: ${soxStatus.pid}, Device: ${soxStatus.device})`
-                        : 'Not running'}
-                </p>
-                <p>
-                    <strong>Side Panel Client:</strong> {sidePanelClient ? 'Ready' : 'Not initialized'}
-                </p>
+        <div className="min-h-screen bg-gradient-to-br from-[#0a0a0a] via-[#141244] to-[#1a1458] text-white p-6">
+            {/* Animated background elements */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden">
+                <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-[#803ceb]/10 rounded-full blur-3xl animate-pulse"></div>
+                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#803ceb]/5 rounded-full blur-3xl animate-pulse delay-1000"></div>
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-[#a855f7]/10 rounded-full blur-2xl animate-pulse delay-500"></div>
             </div>
-            <div className="flex flex-wrap gap-4 mb-6">
-                {!isStreaming ? (
-                    <button
-                        onClick={startStreaming}
-                        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                    >
-                        Connect to Backend
-                    </button>
-                ) : (
-                    <button
-                        onClick={stopStreaming}
-                        className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-                    >
-                        Disconnect
-                    </button>
-                )}
-                <button
-                    onClick={refreshStatus}
-                    className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-                >
-                    Refresh Status
-                </button>
-                <button
-                    onClick={startActivity}
-                    className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
-                >
-                    Open in Main Stage
-                </button>
-                <button
-                    onClick={getMeetingInfo}
-                    className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
-                >
-                    Get Meeting Info
-                </button>
-            </div>
-            <div className="mb-6 p-4 bg-yellow-50 rounded-lg">
-                <h3 className="font-bold text-yellow-800 mb-2">SoxClient Controls</h3>
-                <div className="mb-4">
-                    <label
-                        htmlFor="deviceSelect"
-                        className="block text-sm font-medium text-yellow-700 mb-1"
-                    >
-                        Audio Device:
-                    </label>
-                    <select
-                        id="deviceSelect"
-                        value={selectedDevice}
-                        onChange={(e) => setSelectedDevice(e.target.value)}
-                        className="w-full p-2 border border-yellow-300 text-black rounded bg-white"
-                        disabled={loading || soxStatus.running}
-                    >
-                        {audioDevices.map((device) => (
-                            <option key={device.name} value={device.name}>
-                                {device.name} - {device.description}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-                <div className="flex flex-wrap gap-4">
-                    {!soxStatus.running ? (
-                        <button
-                            onClick={startSoxClient}
-                            disabled={loading || !isConnected}
-                            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50"
-                        >
-                            {loading ? 'Starting...' : 'Start SoxClient'}
-                        </button>
-                    ) : (
-                        <button
-                            onClick={stopSoxClient}
-                            disabled={loading}
-                            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50"
-                        >
-                            {loading ? 'Stopping...' : 'Stop SoxClient'}
-                        </button>
-                    )}
-                </div>
-                {soxStatus.running && soxStatus.startTime && (
-                    <div className="mt-2 text-sm text-yellow-700">
-                        Started at: {formatStartTime(soxStatus.startTime)}
+
+            <div className="relative z-10 max-w-4xl mx-auto">
+                {/* Header */}
+                <div className="text-center mb-8">
+                    <div className="flex items-center justify-center gap-4 mb-4">
+                        <AIOrb isActive={isConnected} size="w-8 h-8" />
+                        <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-[#803ceb] bg-clip-text text-transparent">
+                            Recos AI
+                        </h1>
+                        <AIOrb isActive={isStreaming} size="w-8 h-8" />
                     </div>
-                )}
-            </div>
-            <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-                <h3 className="font-bold text-blue-800 mb-2">How to Use This Add-on</h3>
-                <ol className="list-decimal pl-5 text-blue-700">
-                    <li>Connect to the backend using the button above</li>
-                    <li>Select an audio device from the dropdown</li>
-                    <li>Click &quot;Start SoxClient&quot; to begin audio capture</li>
-                    <li>Open a Google Meet meeting</li>
-                    <li>Make sure your system audio is set up to capture the meeting audio</li>
-                    <li>Transcripts will appear here in real-time</li>
-                </ol>
-            </div>
-            <div className="mb-6 p-4 bg-green-50 rounded-lg">
-                <h3 className="font-bold text-green-800 mb-2">Audio Setup Tips</h3>
-                <ul className="list-disc pl-5 text-green-700">
-                    <li>Use headphones to prevent echo and feedback</li>
-                    <li>Set your system audio output to a reasonable volume</li>
-                    <li>Use the &quot;monitor&quot; device to capture system audio directly</li>
-                    <li>Make sure your microphone isn&apos;t picking up speaker output</li>
-                    <li>If using PulseAudio, select the specific device that&apos;s capturing the meeting audio</li>
-                </ul>
-            </div>
-            <div>
-                <h2 className="text-xl font-semibold mb-3">Transcripts</h2>
-                <div className="h-96 overflow-y-auto border border-gray-300 rounded-lg p-4 bg-white">
-                    {transcripts.length === 0 ? (
-                        <p className="text-gray-500">
-                            No transcripts yet. Connect to the backend and start SoxClient to see results.
-                        </p>
-                    ) : (
-                        transcripts.map((transcript, index) => (
-                            <div
-                                key={index}
-                                className={`mb-4 p-3 rounded-lg ${transcript.isFinal ? 'bg-gray-50' : 'bg-yellow-50'
-                                    }`}
-                            >
-                                <div className="font-bold text-blue-600">{transcript.speaker}:</div>
-                                <div>{transcript.text}</div>
-                                {transcript.analysis && transcript.isFinal && (
-                                    <div className="mt-2 text-sm text-gray-600">
-                                        <div>
-                                            <strong>Summary:</strong> {transcript.analysis.summary}
-                                        </div>
-                                        <div>
-                                            <strong>Semantics:</strong> {transcript.analysis.semantics}
-                                        </div>
-                                        {transcript.analysis.questions && transcript.analysis.questions.length > 0 && (
-                                            <div>
-                                                <strong>Follow-up questions:</strong>
-                                                <ul className="list-disc pl-5 mt-1">
-                                                    {transcript.analysis.questions.map((q, i) => (
-                                                        <li key={i}>{q}</li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
-                                    </div>
+                    <p className="text-white/60 text-lg">Advanced AI-powered meeting transcription & analysis</p>
+                </div>
+
+                {/* Status Dashboard */}
+                <div className="mb-8">
+                    <StatusIndicator status={status} isConnected={isConnected} />
+                </div>
+
+                {/* System Metrics */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div className="bg-gradient-to-r from-[#141244]/60 to-[#1a1458]/40 backdrop-blur-md rounded-xl p-4 border border-[#803ceb]/20">
+                        <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Backend Link</div>
+                        <div className="flex items-center gap-2">
+                            <AIOrb isActive={isConnected} size="w-2 h-2" />
+                            <span className="text-white/90">{isConnected ? 'Active' : 'Inactive'}</span>
+                        </div>
+                    </div>
+                    <div className="bg-gradient-to-r from-[#141244]/60 to-[#1a1458]/40 backdrop-blur-md rounded-xl p-4 border border-[#803ceb]/20">
+                        <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Data Stream</div>
+                        <div className="flex items-center gap-2">
+                            <AIOrb isActive={isStreaming} size="w-2 h-2" />
+                            <span className="text-white/90">{isStreaming ? 'Streaming' : 'Standby'}</span>
+                        </div>
+                    </div>
+                    <div className="bg-gradient-to-r from-[#141244]/60 to-[#1a1458]/40 backdrop-blur-md rounded-xl p-4 border border-[#803ceb]/20">
+                        <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Audio Processor</div>
+                        <div className="flex items-center gap-2">
+                            <AIOrb isActive={soxStatus.running} size="w-2 h-2" />
+                            <span className="text-white/90">{soxStatus.running ? 'Online' : 'Offline'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Control Panel */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <Card title="Control Center" glowing={isConnected}>
+                        <div className="space-y-4">
+                            <div className="flex flex-wrap gap-3">
+                                {!isStreaming ? (
+                                    <Button onClick={startStreaming} variant="primary">
+                                        Start Connection
+                                    </Button>
+                                ) : (
+                                    <Button onClick={stopStreaming} variant="danger">
+                                        End Connection
+                                    </Button>
+                                )}
+                                <Button onClick={refreshStatus} variant="secondary">
+                                    System Scan
+                                </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                                <Button onClick={startActivity} variant="success">
+                                    Expand Interface
+                                </Button>
+                                <Button onClick={getMeetingInfo} variant="secondary">
+                                    Meeting Info
+                                </Button>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card title="Audio Processor Controls" glowing={soxStatus.running}>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-[#803ceb] mb-2">
+                                    Audio Input Source
+                                </label>
+                                <select
+                                    value={selectedDevice}
+                                    onChange={(e) => setSelectedDevice(e.target.value)}
+                                    className="w-full p-3 rounded-xl bg-[#141244]/60 border border-[#803ceb]/30 text-white focus:border-[#803ceb] focus:ring-2 focus:ring-[#803ceb]/20 transition-all"
+                                    disabled={loading || soxStatus.running}
+                                >
+                                    {audioDevices.map((device) => (
+                                        <option key={device.name} value={device.name} className="bg-[#141244]">
+                                            {device.name} - {device.description}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                {!soxStatus.running ? (
+                                    <Button
+                                        onClick={startSoxClient}
+                                        disabled={loading || !isConnected}
+                                        loading={loading}
+                                        variant="success"
+                                        className="w-full"
+                                    >
+                                        {loading ? 'Initializing...' : 'Activate Processor'}
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        onClick={stopSoxClient}
+                                        disabled={loading}
+                                        loading={loading}
+                                        variant="danger"
+                                        className="w-full"
+                                    >
+                                        {loading ? 'Deactivating...' : 'Deactivate Processor'}
+                                    </Button>
                                 )}
                             </div>
-                        ))
-                    )}
+                            {soxStatus.running && soxStatus.startTime && (
+                                <div className="text-sm text-white/60">
+                                    Sync initiated: {formatStartTime(soxStatus.startTime)}
+                                </div>
+                            )}
+                        </div>
+                    </Card>
                 </div>
+
+
+                {/* Transcript Stream */}
+                <Card title="Transcript Stream" glowing={transcripts.length > 0}>
+                    <div className="h-96 overflow-y-auto space-y-4 pr-2">
+                        {transcripts.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-white/50">
+                                <AIOrb isActive={false} size="w-12 h-12" />
+                                <p className="mt-4 text-center">
+                                    Audio stream inactive. Initialize connection to begin analysis.
+                                </p>
+                            </div>
+                        ) : (
+                            transcripts.map((transcript, index) => (
+                                <div
+                                    key={index}
+                                    className={`p-4 rounded-xl border transition-all duration-500 ${transcript.isFinal
+                                            ? 'bg-gradient-to-r from-[#141244]/40 to-[#1a1458]/20 border-[#803ceb]/30'
+                                            : 'bg-gradient-to-r from-[#803ceb]/10 to-[#a855f7]/5 border-[#803ceb]/50 animate-pulse'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <AIOrb isActive={!transcript.isFinal} size="w-3 h-3" />
+                                        <span className="font-semibold text-[#803ceb]">{transcript.speaker}</span>
+                                        {!transcript.isFinal && (
+                                            <span className="text-xs text-[#803ceb] bg-[#803ceb]/20 px-2 py-1 rounded-full">
+                                                Processing
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-white/90 mb-3">{transcript.text}</p>
+                                    {transcript.analysis && transcript.isFinal && (
+                                        <div className="border-t border-[#803ceb]/20 pt-3 space-y-2">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Transcript Summary</div>
+                                                    <p className="text-white/70 text-sm">{transcript.analysis.summary}</p>
+                                                </div>
+                                                <div>
+                                                    <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Semantic Analysis</div>
+                                                    <p className="text-white/70 text-sm">{transcript.analysis.semantics}</p>
+                                                </div>
+                                            </div>
+                                            {transcript.analysis.questions && transcript.analysis.questions.length > 0 && (
+                                                <div>
+                                                    <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-2">Question Recommendations</div>
+                                                    <div className="space-y-1">
+                                                        {transcript.analysis.questions.map((q, i) => (
+                                                            <div key={i} className="flex items-start gap-2">
+                                                                <div className="w-1 h-1 bg-[#803ceb] rounded-full mt-2 flex-shrink-0"></div>
+                                                                <span className="text-white/70 text-sm">{q}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </Card>
             </div>
         </div>
     );
