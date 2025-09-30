@@ -43,7 +43,8 @@ const AUDIO_CONFIG = {
   bitDepth: 16
 };
 
-class MeetMediaAPICapture {
+// ---- UPDATED: Use browser API for audio capture ----
+class BrowserAudioCapture {
   private mediaStream: MediaStream | null = null;
   private audioContext: AudioContext | null = null;
   private scriptProcessor: ScriptProcessorNode | null = null;
@@ -60,7 +61,6 @@ class MeetMediaAPICapture {
     averageLatency: 0,
     connectionTime: 0
   };
-  private meetClient: MeetSidePanelClient | null = null;
 
   constructor(
     private backendUrl: string,
@@ -68,59 +68,39 @@ class MeetMediaAPICapture {
     private onMetricsUpdate: (metrics: AudioMetrics) => void
   ) { }
 
-  async initialize(client: MeetSidePanelClient): Promise<void> {
-    this.meetClient = client;
-  }
-
   async requestPermissions(): Promise<boolean> {
     try {
-      if (!this.meetClient) {
-        throw new Error('Meet client not initialized');
-      }
-
-      const meetingInfo = await this.meetClient.getMeetingInfo();
-
-      if (!meetingInfo.meetingId) {
-        throw new Error('Not in an active meeting');
-      }
-
-      this.onStatusChange('Meet Media API available - ready for capture');
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.onStatusChange('Microphone permissions granted - ready for capture');
       return true;
-
     } catch (error: any) {
-      console.error('[MeetMediaAPI] Permission check failed:', error);
-      this.onStatusChange(`Media API check failed: ${error.message}`);
+      console.error('[BrowserAudioCapture] Permission denied:', error);
+      this.onStatusChange(`Microphone permission denied: ${error.message}`);
       return false;
     }
   }
 
   async startCapture(): Promise<boolean> {
     if (this.isCapturing) {
-      console.log('[MeetMediaAPI] Already capturing');
+      console.log('[BrowserAudioCapture] Already capturing');
       return true;
     }
 
     try {
-      if (!this.meetClient) {
-        throw new Error('Meet client not initialized');
-      }
-
-      // Connect to WebSocket first
       if (!await this.connectWebSocket()) {
         return false;
       }
 
-      this.onStatusChange('Requesting Media API access...');
+      this.onStatusChange('Requesting microphone access...');
 
-      this.mediaStream = await (this.meetClient as any).getMediaStream({
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: AUDIO_CONFIG.sampleRate,
           channelCount: AUDIO_CONFIG.channelCount
-        },
-        video: false 
+        }
       });
 
-      this.audioContext = new AudioContext({
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
         sampleRate: AUDIO_CONFIG.sampleRate
       });
 
@@ -147,18 +127,16 @@ class MeetMediaAPICapture {
       this.isCapturing = true;
       this.metrics.connectionTime = Date.now();
       this.startHeartbeat();
-      this.onStatusChange('Media API capture active - streaming meeting audio');
+      this.onStatusChange('Microphone capture active - streaming audio');
 
-      console.log('[MeetMediaAPI] Capture started successfully');
+      console.log('[BrowserAudioCapture] Capture started successfully');
       return true;
 
     } catch (error: any) {
-      console.error('[MeetMediaAPI] Failed to start capture:', error);
+      console.error('[BrowserAudioCapture] Failed to start capture:', error);
 
       if (error.message?.includes('consent') || error.message?.includes('permission')) {
-        this.onStatusChange('Waiting for participant consent to access meeting audio...');
-      } else if (error.message?.includes('Media API') || error.message?.includes('not available')) {
-        this.onStatusChange('Media API not available. Please ensure it is enabled in Google Admin console.');
+        this.onStatusChange('Waiting for user consent to access microphone...');
       } else {
         this.onStatusChange(`Capture failed: ${error.message}`);
       }
@@ -186,7 +164,7 @@ class MeetMediaAPICapture {
       this.metrics.bytesTransmitted += int16Buffer.buffer.byteLength;
       this.onMetricsUpdate(this.metrics);
     } catch (error) {
-      console.error('[MeetMediaAPI] Failed to send audio data:', error);
+      console.error('[BrowserAudioCapture] Failed to send audio data:', error);
       this.metrics.packetsLost++;
     }
   }
@@ -209,13 +187,13 @@ class MeetMediaAPICapture {
           clearTimeout(connectTimeout);
           this.reconnectAttempts = 0;
           this.onStatusChange('Backend connection established');
-          console.log('[MeetMediaAPI] WebSocket connected');
+          console.log('[BrowserAudioCapture] WebSocket connected');
           resolve(true);
         };
 
         this.ws.onclose = (event) => {
           clearTimeout(connectTimeout);
-          console.log(`[MeetMediaAPI] WebSocket closed: ${event.code} - ${event.reason}`);
+          console.log(`[BrowserAudioCapture] WebSocket closed: ${event.code} - ${event.reason}`);
           this.onStatusChange('Backend connection lost');
 
           if (this.isCapturing && this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -225,7 +203,7 @@ class MeetMediaAPICapture {
 
         this.ws.onerror = (error) => {
           clearTimeout(connectTimeout);
-          console.error('[MeetMediaAPI] WebSocket error:', error);
+          console.error('[BrowserAudioCapture] WebSocket error:', error);
           this.onStatusChange('Backend connection error');
           resolve(false);
         };
@@ -233,7 +211,7 @@ class MeetMediaAPICapture {
         this.ws.onmessage = this.handleWebSocketMessage.bind(this);
 
       } catch (error) {
-        console.error('[MeetMediaAPI] WebSocket creation failed:', error);
+        console.error('[BrowserAudioCapture] WebSocket creation failed:', error);
         this.onStatusChange('Failed to connect to backend');
         resolve(false);
       }
@@ -249,7 +227,7 @@ class MeetMediaAPICapture {
           this.metrics.averageLatency = (this.metrics.averageLatency + latency) / 2;
         }
       } catch {
-        console.debug('[MeetMediaAPI] Non-JSON message received:', event.data);
+        console.debug('[BrowserAudioCapture] Non-JSON message received:', event.data);
       }
     }
   }
@@ -281,7 +259,7 @@ class MeetMediaAPICapture {
           timestamp: Date.now()
         }));
       }
-    }, 30000); 
+    }, 30000);
   }
 
   private stopHeartbeat(): void {
@@ -310,7 +288,7 @@ class MeetMediaAPICapture {
       try {
         await this.audioContext.close();
       } catch (error) {
-        console.warn('[MeetMediaAPI] Error closing audio context:', error);
+        console.warn('[BrowserAudioCapture] Error closing audio context:', error);
       }
       this.audioContext = null;
     }
@@ -325,8 +303,8 @@ class MeetMediaAPICapture {
       this.ws = null;
     }
 
-    this.onStatusChange('Media API capture stopped');
-    console.log('[MeetMediaAPI] Capture stopped');
+    this.onStatusChange('Microphone capture stopped');
+    console.log('[BrowserAudioCapture] Capture stopped');
   }
 
   getAudioLevel(): number {
@@ -340,7 +318,7 @@ class MeetMediaAPICapture {
     for (let i = 0; i < bufferLength; i++) {
       sum += dataArray[i];
     }
-    return sum / bufferLength / 255; 
+    return sum / bufferLength / 255;
   }
 
   isActive(): boolean {
@@ -351,6 +329,8 @@ class MeetMediaAPICapture {
     return { ...this.metrics };
   }
 }
+
+// ---- End BrowserAudioCapture ----
 
 const AIOrb = ({ isActive, size = "w-4 h-4" }: { isActive: boolean; size?: string }) => (
   <div className={`${size} rounded-full bg-gradient-to-r from-[#803ceb] to-[#a855f7] ${isActive ? 'animate-pulse shadow-lg shadow-purple-400/50' : 'opacity-50'
@@ -453,11 +433,11 @@ export default function SidePanel() {
     connectionTime: 0
   });
   const [audioLevel, setAudioLevel] = useState(0);
-  const [hasMediaAPIPermissions, setHasMediaAPIPermissions] = useState(false);
+  const [hasMicPermissions, setHasMicPermissions] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const mediaAPICapture = useRef<MeetMediaAPICapture | null>(null);
+  const browserAudioCapture = useRef<BrowserAudioCapture | null>(null);
   const transcriptWebSocket = useRef<WebSocket | null>(null);
   const audioLevelInterval = useRef<NodeJS.Timeout | null>(null);
 
@@ -472,22 +452,21 @@ export default function SidePanel() {
         const client = await session.createSidePanelClient();
         setSidePanelClient(client);
 
-        mediaAPICapture.current = new MeetMediaAPICapture(
+        browserAudioCapture.current = new BrowserAudioCapture(
           backendUrl,
           setStatus,
           setAudioMetrics
         );
-        await mediaAPICapture.current.initialize(client);
 
         const meetingInfo = await client.getMeetingInfo();
         setMeetingSession({
           sessionId: `session_${Date.now()}`,
           meetingId: meetingInfo.meetingId || 'unknown',
           startTime: new Date(),
-          participants: [] 
+          participants: []
         });
 
-        setStatus('Recos AI with Media API initialized successfully');
+        setStatus('Recos AI initialized successfully');
 
         client.on('frameToFrameMessage', (event) => {
           console.log('Frame to frame message:', event);
@@ -495,7 +474,7 @@ export default function SidePanel() {
 
       } catch (error) {
         console.error('Error initializing addon:', error);
-        setStatus('Failed to initialize Recos AI Media API');
+        setStatus('Failed to initialize Recos AI');
       }
     };
 
@@ -505,8 +484,8 @@ export default function SidePanel() {
   useEffect(() => {
     if (isCapturing) {
       audioLevelInterval.current = setInterval(() => {
-        if (mediaAPICapture.current) {
-          setAudioLevel(mediaAPICapture.current.getAudioLevel());
+        if (browserAudioCapture.current) {
+          setAudioLevel(browserAudioCapture.current.getAudioLevel());
         }
       }, 100);
     } else {
@@ -578,22 +557,22 @@ export default function SidePanel() {
 
   }, [backendUrl]);
 
-  const requestMediaAPIPermissions = async () => {
+  const requestMicPermissions = async () => {
     setLoading(true);
     try {
-      if (mediaAPICapture.current) {
-        const granted = await mediaAPICapture.current.requestPermissions();
-        setHasMediaAPIPermissions(granted);
+      if (browserAudioCapture.current) {
+        const granted = await browserAudioCapture.current.requestPermissions();
+        setHasMicPermissions(granted);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const startMediaAPICapture = async () => {
+  const startBrowserAudioCapture = async () => {
     setLoading(true);
     try {
-      if (mediaAPICapture.current && await mediaAPICapture.current.startCapture()) {
+      if (browserAudioCapture.current && await browserAudioCapture.current.startCapture()) {
         setIsCapturing(true);
         connectToTranscriptStream();
       }
@@ -605,8 +584,8 @@ export default function SidePanel() {
   const stopCapture = async () => {
     setLoading(true);
     try {
-      if (mediaAPICapture.current) {
-        await mediaAPICapture.current.stopCapture();
+      if (browserAudioCapture.current) {
+        await browserAudioCapture.current.stopCapture();
         setIsCapturing(false);
 
         if (transcriptWebSocket.current) {
@@ -667,13 +646,13 @@ export default function SidePanel() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-4 mb-4">
-            <AIOrb isActive={hasMediaAPIPermissions} size="w-8 h-8" />
+            <AIOrb isActive={hasMicPermissions} size="w-8 h-8" />
             <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-[#803ceb] bg-clip-text text-transparent">
               Recos AI
             </h1>
             <AIOrb isActive={isCapturing} size="w-8 h-8" />
           </div>
-          <p className="text-white/60 text-lg">Real-time meeting intelligence with Google Meet Media API</p>
+          <p className="text-white/60 text-lg">Real-time meeting intelligence (browser microphone streaming)</p>
         </div>
 
         {/* Status Dashboard */}
@@ -718,42 +697,40 @@ export default function SidePanel() {
 
         {/* Control Panel */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <Card title="Google Meet Media API" glowing={isCapturing}>
+          <Card title="Microphone Streaming" glowing={isCapturing}>
             <div className="space-y-4">
-              {!hasMediaAPIPermissions ? (
+              {!hasMicPermissions ? (
                 <div className="space-y-3">
-                  
                   <Button
-                    onClick={requestMediaAPIPermissions}
+                    onClick={requestMicPermissions}
                     loading={loading}
                     variant="primary"
                     className="w-full"
                   >
-                    Initialize Meet Media API
+                    Grant Microphone Permission
                   </Button>
                 </div>
               ) : !isCapturing ? (
                 <div className="space-y-3">
                   <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
-                    <div className="text-green-300 font-medium text-sm mb-1">Media API Ready</div>
+                    <div className="text-green-300 font-medium text-sm mb-1">Microphone Ready</div>
                     <div className="text-white/70 text-xs">
-                      Meet Media API initialized. Start capture to begin streaming meeting audio.
-                      Participants will be prompted for consent.
+                      Permission granted. Start capture to begin streaming microphone audio.
                     </div>
                   </div>
                   <Button
-                    onClick={startMediaAPICapture}
+                    onClick={startBrowserAudioCapture}
                     loading={loading}
                     variant="success"
                     className="w-full"
                   >
-                    Start Meet Audio Capture
+                    Start Microphone Capture
                   </Button>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3">
-                    <div className="text-purple-300 font-medium text-sm mb-1">Media API Active</div>
+                    <div className="text-purple-300 font-medium text-sm mb-1">Microphone Streaming Active</div>
                   </div>
                   <Button
                     onClick={stopCapture}
@@ -761,7 +738,7 @@ export default function SidePanel() {
                     variant="danger"
                     className="w-full"
                   >
-                    Stop Media API Capture
+                    Stop Microphone Capture
                   </Button>
                 </div>
               )}
@@ -793,7 +770,6 @@ export default function SidePanel() {
           </Card>
         </div>
 
-
         {/* Live Transcripts */}
         <Card title="Live Transcripts & AI Analysis" glowing={transcripts.length > 0}>
           <div className="h-96 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
@@ -808,7 +784,7 @@ export default function SidePanel() {
                 </p>
                 {isCapturing && (
                   <div className="mt-2 text-xs text-white/40">
-                    Make sure participants have granted Media API consent
+                    Make sure microphone permission is granted
                   </div>
                 )}
               </div>
@@ -871,8 +847,8 @@ export default function SidePanel() {
 
         {/* Footer */}
         <div className="mt-8 text-center text-white/40 text-sm">
-          <p>Powered by Google Meet Media API, Speech API, Gemini AI, and advanced real-time processing</p>
-          <p className="mt-1">All audio processing requires participant consent and uses secure transmission</p>
+          <p>Powered by browser microphone, Speech API, Gemini AI, and advanced real-time processing</p>
+          <p className="mt-1">All audio processing requires user consent and uses secure transmission</p>
         </div>
       </div>
 
