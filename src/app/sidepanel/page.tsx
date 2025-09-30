@@ -722,14 +722,7 @@ export default function SidePanel() {
             <div className="space-y-4">
               {!hasMediaAPIPermissions ? (
                 <div className="space-y-3">
-                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                    <div className="text-blue-300 font-medium text-sm mb-1">Official Meet Media API</div>
-                    <div className="text-white/70 text-xs">
-                      Uses Google&apos;s official Media API to capture meeting audio.
-                      Participants will see a consent prompt and can control access.
-                      Ensure Media API is enabled in your Google Admin console.
-                    </div>
-                  </div>
+                  
                   <Button
                     onClick={requestMediaAPIPermissions}
                     loading={loading}
@@ -761,10 +754,6 @@ export default function SidePanel() {
                 <div className="space-y-3">
                   <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3">
                     <div className="text-purple-300 font-medium text-sm mb-1">Media API Active</div>
-                    <div className="text-white/70 text-xs">
-                      Streaming meeting audio through official Google Meet Media API.
-                      Participants can control access through their consent settings.
-                    </div>
                   </div>
                   <Button
                     onClick={stopCapture}
