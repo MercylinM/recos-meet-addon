@@ -50,7 +50,6 @@ export function useTranscriptStream(
         setConnectionStatus('Connecting...');
 
         try {
-            // Connect to the transcript WebSocket endpoint
             const ws = new WebSocket(`${WS_URL}/ws/transcripts`);
 
             ws.onopen = () => {
@@ -82,7 +81,6 @@ export function useTranscriptStream(
                 setConnectionStatus('Disconnected');
                 wsRef.current = null;
 
-                // Auto-reconnect if we should be connected
                 if (shouldReconnectRef.current) {
                     const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
                     console.log(`Reconnecting in ${delay}ms...`);
@@ -102,6 +100,8 @@ export function useTranscriptStream(
             setIsConnected(false);
         }
     }, [reconnectAttempts, onTranscriptReceived]);
+
+    
 
     const disconnect = useCallback(() => {
         shouldReconnectRef.current = false;
