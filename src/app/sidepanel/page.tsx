@@ -25,7 +25,6 @@ export default function SidePanel() {
 
   const transcriptsEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize addon session
   useEffect(() => {
     const initializeAddon = async () => {
       try {
@@ -132,8 +131,8 @@ export default function SidePanel() {
       if (sidePanelClient) {
         try {
           const meetingInfo = await sidePanelClient.getMeetingInfo();
-          meetingLink = meetingInfo.meetingId
-            ? `https://meet.google.com/${meetingInfo.meetingId}`
+          meetingLink = meetingInfo.meetingCode
+            ? `https://meet.google.com/${meetingInfo.meetingCode}`
             : '';
           console.log('Meeting link:', meetingLink);
         } catch (error) {
