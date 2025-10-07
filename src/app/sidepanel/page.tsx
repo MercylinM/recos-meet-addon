@@ -225,7 +225,7 @@ export default function SidePanel() {
     setTranscripts([]);
   };
 
-  cconst openMainStage = async (): Promise<void> => {
+  const openMainStage = async (): Promise<void> => {
     if (!sidePanelClient) {
       setStatus('Add-on not initialized');
       return;
