@@ -233,8 +233,12 @@ export default function SidePanel() {
 
     try {
       setLoading(true);
-      await sidePanelClient.setMainStageUrl(`${window.location.origin}/mainstage`);
+      const mainStageUrl = `${window.location.origin}/mainstage`;
+      await sidePanelClient.startActivityInAddonMainStage(mainStageUrl, {
+        additionalData: JSON.stringify({ timestamp: Date.now() })
+      });
       setStatus('Main stage opened for all participants');
+      console.log('Main stage opened successfully');
     } catch (error) {
       console.error('Error opening main stage:', error);
       setStatus('Failed to open main stage');
