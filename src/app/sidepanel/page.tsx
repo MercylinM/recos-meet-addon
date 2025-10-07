@@ -225,7 +225,7 @@ export default function SidePanel() {
     setTranscripts([]);
   };
 
-  const openMainStage = async (): Promise<void> => {
+  cconst openMainStage = async (): Promise<void> => {
     if (!sidePanelClient) {
       setStatus('Add-on not initialized');
       return;
@@ -236,9 +236,7 @@ export default function SidePanel() {
       const mainStageUrl = `${window.location.origin}/mainstage`;
       await sidePanelClient.startActivity({
         mainStageUrl: mainStageUrl,
-        activityStartingState: {
-          additionalData: JSON.stringify({ timestamp: Date.now() })
-        }
+        additionalData: JSON.stringify({ timestamp: Date.now() })
       });
       setStatus('Main stage opened for all participants');
       console.log('Main stage opened successfully');
