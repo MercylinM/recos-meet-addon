@@ -234,8 +234,11 @@ export default function SidePanel() {
     try {
       setLoading(true);
       const mainStageUrl = `${window.location.origin}/mainstage`;
-      await sidePanelClient.startActivity(mainStageUrl, {
-        additionalData: JSON.stringify({ timestamp: Date.now() })
+      await sidePanelClient.startActivity({
+        mainStageUrl: mainStageUrl,
+        activityStartingState: {
+          additionalData: JSON.stringify({ timestamp: Date.now() })
+        }
       });
       setStatus('Main stage opened for all participants');
       console.log('Main stage opened successfully');
