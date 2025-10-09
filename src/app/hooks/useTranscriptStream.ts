@@ -7,14 +7,17 @@ interface TranscriptData {
     message_type: string;
     transcript: string;
     speaker_name: string;
+    speaker_tag: string;
     timestamp: number;
     is_final: boolean;
+    end_of_turn: boolean;
     analysis?: {
         summary?: string;
-        keywords?: string[];
+        semantics?: string;
         questions?: string[];
+        confidence?: number;
+        keywords?: string[];
     };
-    analysis_timestamp?: number;
 }
 
 interface UseTranscriptStreamReturn {
@@ -25,16 +28,19 @@ interface UseTranscriptStreamReturn {
     bytesReceived: number;
     connect: () => void;
     disconnect: () => void;
+    transcripts: TranscriptData[];
+    clearTranscripts: () => void;
 }
 
 export function useTranscriptStream(
-    onTranscriptReceived: (data: TranscriptData) => void
+    onTranscriptReceived?: (data: TranscriptData) => void
 ): UseTranscriptStreamReturn {
     const [isConnected, setIsConnected] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState('Disconnected');
     const [lastMessageTime, setLastMessageTime] = useState(0);
     const [reconnectAttempts, setReconnectAttempts] = useState(0);
     const [bytesReceived, setBytesReceived] = useState(0);
+    const [transcripts, setTranscripts] = useState<TranscriptData[]>([]);
 
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -50,7 +56,10 @@ export function useTranscriptStream(
         setConnectionStatus('Connecting...');
 
         try {
-            const ws = new WebSocket(`${WS_URL}/ws/transcripts`);
+            const wsUrl = `${WS_URL}/ws/audio`;
+            console.log('Connecting to WebSocket:', wsUrl);
+
+            const ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
                 console.log('Transcript WebSocket connected');
@@ -62,11 +71,26 @@ export function useTranscriptStream(
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data) as TranscriptData;
-                    setLastMessageTime(Date.now());
+                    const now = Date.now();
+
+                    setLastMessageTime(now);
                     setBytesReceived(prev => prev + event.data.length);
-                    onTranscriptReceived(data);
+
+                    setTranscripts(prev => [...prev, data]);
+
+                    if (onTranscriptReceived) {
+                        onTranscriptReceived(data);
+                    }
+
+                    console.log('Received transcript:', {
+                        type: data.message_type,
+                        speaker: data.speaker_name,
+                        transcript: data.transcript.substring(0, 50) + '...',
+                        timestamp: new Date(data.timestamp).toLocaleTimeString()
+                    });
+
                 } catch (error) {
-                    console.error('Failed to parse transcript message:', error);
+                    console.error('Failed to parse transcript message:', error, event.data);
                 }
             };
 
@@ -75,15 +99,15 @@ export function useTranscriptStream(
                 setConnectionStatus('Connection error');
             };
 
-            ws.onclose = () => {
-                console.log('Transcript WebSocket closed');
+            ws.onclose = (event) => {
+                console.log('🔌 Transcript WebSocket closed:', event.code, event.reason);
                 setIsConnected(false);
-                setConnectionStatus('Disconnected');
+                setConnectionStatus(`Disconnected (${event.code})`);
                 wsRef.current = null;
 
-                if (shouldReconnectRef.current) {
+                if (shouldReconnectRef.current && event.code !== 1000) {
                     const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-                    console.log(`Reconnecting in ${delay}ms...`);
+                    console.log(`Reconnecting in ${delay}ms... (attempt ${reconnectAttempts + 1})`);
                     setConnectionStatus(`Reconnecting in ${Math.round(delay / 1000)}s...`);
 
                     reconnectTimeoutRef.current = setTimeout(() => {
@@ -101,9 +125,8 @@ export function useTranscriptStream(
         }
     }, [reconnectAttempts, onTranscriptReceived]);
 
-    
-
     const disconnect = useCallback(() => {
+        console.log('Disconnecting WebSocket...');
         shouldReconnectRef.current = false;
 
         if (reconnectTimeoutRef.current) {
@@ -112,13 +135,17 @@ export function useTranscriptStream(
         }
 
         if (wsRef.current) {
-            wsRef.current.close();
+            wsRef.current.close(1000, 'Manual disconnect');
             wsRef.current = null;
         }
 
         setIsConnected(false);
         setConnectionStatus('Disconnected');
         setReconnectAttempts(0);
+    }, []);
+
+    const clearTranscripts = useCallback(() => {
+        setTranscripts([]);
     }, []);
 
     useEffect(() => {
@@ -135,5 +162,7 @@ export function useTranscriptStream(
         bytesReceived,
         connect,
         disconnect,
+        transcripts,
+        clearTranscripts,
     };
 }

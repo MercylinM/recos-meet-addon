@@ -144,7 +144,7 @@ export default function SidePanel() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          meetLink: meetingLink || process.env.NEXT_PUBLIC_DEFAULT_MEET_LINK,
+          meet_link: meetingLink || process.env.NEXT_PUBLIC_DEFAULT_MEET_LINK,
           duration: 60
         })
       });
