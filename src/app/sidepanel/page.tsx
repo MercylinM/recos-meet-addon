@@ -37,7 +37,6 @@ export default function SidePanel() {
         const client = await session.createSidePanelClient();
         setSidePanelClient(client);
 
-        // Get meeting info immediately
         try {
           const info = await client.getMeetingInfo();
           setMeetingInfo(info);
@@ -215,7 +214,7 @@ export default function SidePanel() {
         </div>
 
         {/* Status Dashboard */}
-        <div className="mb-8">
+        {/* <div className="mb-8">
           <StatusIndicator
             status={status}
             isConnected={isConnected}
@@ -226,10 +225,10 @@ export default function SidePanel() {
               reconnectAttempts
             }}
           />
-        </div>
+        </div> */}
 
         {/* System Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-gradient-to-r from-[#141244]/60 to-[#1a1458]/40 backdrop-blur-md rounded-xl p-4 border border-[#803ceb]/20">
             <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Transcript Status</div>
             <div className="flex items-center gap-2">
@@ -269,10 +268,10 @@ export default function SidePanel() {
               </span>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Meeting Information */}
-        {meetingInfo && (
+        {/* {meetingInfo && (
           <Card title="Meeting Information" glowing={true} className="mb-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -287,7 +286,7 @@ export default function SidePanel() {
               </div>
             </div>
           </Card>
-        )}
+        )} */}
 
         {/* Control Panel */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
