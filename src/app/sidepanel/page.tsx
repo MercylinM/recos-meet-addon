@@ -22,6 +22,7 @@ export default function SidePanel() {
   const [status, setStatus] = useState<string>('Initializing...');
   const [botStatus, setBotStatus] = useState<'idle' | 'starting' | 'running' | 'error'>('idle');
   const [sessionStartTime, setSessionStartTime] = useState<number>(0);
+  const [meetingInfo, setMeetingInfo] = useState<any>(null);
 
   const transcriptsEndRef = useRef<HTMLDivElement>(null);
 
@@ -36,7 +37,17 @@ export default function SidePanel() {
         const client = await session.createSidePanelClient();
         setSidePanelClient(client);
 
-        setStatus('Ready to connect');
+        // Get meeting info immediately
+        try {
+          const info = await client.getMeetingInfo();
+          setMeetingInfo(info);
+          console.log('Meeting info:', info);
+          setStatus(`Connected to meeting: ${info.meetingCode || 'Unknown'}`);
+        } catch (error) {
+          console.error('Failed to get meeting info:', error);
+          setStatus('Connected to meeting');
+        }
+
         console.log('Add-on session initialized successfully');
       } catch (error) {
         console.error('Failed to initialize add-on session:', error);
@@ -92,132 +103,45 @@ export default function SidePanel() {
     transcriptsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcripts]);
 
-  const testBackendConnection = async (): Promise<boolean> => {
+  // Auto-connect to transcript stream when component mounts
+  useEffect(() => {
+    const initializeTranscriptStream = async () => {
+      try {
+        setStatus('Connecting to transcript stream...');
+        await connect();
+        setStatus('Ready - Listening for transcripts');
+        setBotStatus('running'); // Set as running since we're listening to transcripts
+      } catch (error) {
+        console.error('Failed to connect to transcript stream:', error);
+        setStatus('Failed to connect to transcripts');
+        setBotStatus('error');
+      }
+    };
+
+    initializeTranscriptStream();
+
+    // Cleanup on unmount
+    return () => {
+      disconnect();
+    };
+  }, [connect, disconnect]);
+
+  const checkBotStatus = async (): Promise<void> => {
     try {
-      const response = await fetch(`${BACKEND_URL}/health`, {
+      const response = await fetch(`${BACKEND_URL}/api/bot/status`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' }
       });
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Backend health check:', data);
-        return true;
-      } else {
-        console.error('Backend health check failed:', response.status, response.statusText);
-        return false;
-      }
-    } catch (error) {
-      console.error('Backend connection test failed:', error);
-      return false;
-    }
-  };
-
-  const handleStartBot = async (): Promise<void> => {
-    setLoading(true);
-    setBotStatus('starting');
-
-    try {
-      const backendConnected = await testBackendConnection();
-      if (!backendConnected) {
-        setStatus('Backend server not reachable');
-        setBotStatus('error');
-        return;
-      }
-
-      let meetingLink = '';
-      if (sidePanelClient) {
-        try {
-          const meetingInfo = await sidePanelClient.getMeetingInfo();
-          meetingLink = meetingInfo.meetingCode
-            ? `https://meet.google.com/${meetingInfo.meetingCode}`
-            : '';
-          console.log('Meeting link:', meetingLink);
-        } catch (error) {
-          console.error('Failed to get meeting info:', error);
-        }
-      }
-
-      const response = await fetch(`${BACKEND_URL}/api/bot/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          meet_link: meetingLink || process.env.NEXT_PUBLIC_DEFAULT_MEET_LINK,
-          duration: 60
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to start bot');
-      }
-
-      const data = await response.json();
-      console.log('Bot started:', data);
-
-      connect();
-      setBotStatus('running');
-      setSessionStartTime(Date.now());
-      setStatus('Bot is joining the meeting...');
-
-      if (meetingSession) {
-        try {
-          await fetch(`${BACKEND_URL}/api/session/start`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              meetingId: meetingSession.meetingId,
-              participants: meetingSession.participants
-            })
-          });
-        } catch (error) {
-          console.error('Failed to start session on backend:', error);
+        setBotStatus(data.status || 'idle');
+        if (data.status === 'running' && data.start_time) {
+          setSessionStartTime(new Date(data.start_time).getTime());
         }
       }
     } catch (error) {
-      console.error('Failed to start bot:', error);
-      setStatus('Failed to start bot');
-      setBotStatus('error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStopBot = async (): Promise<void> => {
-    setLoading(true);
-
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/bot/stop`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to stop bot');
-      }
-
-      disconnect();
-      setBotStatus('idle');
-      setSessionStartTime(0);
-      setStatus('Bot stopped');
-
-      if (meetingSession) {
-        try {
-          await fetch(`${BACKEND_URL}/api/session/end`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ meetingId: meetingSession.meetingId })
-          });
-        } catch (error) {
-          console.error('Failed to end session on backend:', error);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to stop bot:', error);
-      setStatus('Failed to stop bot');
-    } finally {
-      setLoading(false);
+      console.error('Failed to check bot status:', error);
     }
   };
 
@@ -236,7 +160,10 @@ export default function SidePanel() {
       const mainStageUrl = `${window.location.origin}/mainstage`;
       await sidePanelClient.startActivity({
         mainStageUrl: mainStageUrl,
-        additionalData: JSON.stringify({ timestamp: Date.now() })
+        additionalData: JSON.stringify({
+          timestamp: Date.now(),
+          transcripts: transcripts.slice(0, 10) // Send recent transcripts
+        })
       });
       setStatus('Main stage opened for all participants');
       console.log('Main stage opened successfully');
@@ -248,12 +175,13 @@ export default function SidePanel() {
     }
   };
 
-  const getMeetingInfo = async (): Promise<void> => {
+  const refreshMeetingInfo = async (): Promise<void> => {
     if (!sidePanelClient) return;
     try {
-      const meetingInfo = await sidePanelClient.getMeetingInfo();
-      console.log('Meeting info:', meetingInfo);
-      setStatus(`Meeting: ${meetingInfo.meetingId || 'Unknown ID'}`);
+      const info = await sidePanelClient.getMeetingInfo();
+      setMeetingInfo(info);
+      console.log('Meeting info refreshed:', info);
+      setStatus(`Meeting: ${info.meetingCode || 'Unknown ID'}`);
     } catch (error) {
       console.error('Error getting meeting info:', error);
       setStatus('Failed to get meeting info');
@@ -281,7 +209,7 @@ export default function SidePanel() {
             <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-[#803ceb] bg-clip-text text-transparent">
               Recos AI
             </h1>
-            <AIOrb isActive={botStatus === 'running'} size="w-8 h-8" />
+            <AIOrb isActive={isConnected} size="w-8 h-8" />
           </div>
           <p className="text-white/60 text-lg">Real-time meeting intelligence & analysis</p>
         </div>
@@ -290,9 +218,9 @@ export default function SidePanel() {
         <div className="mb-8">
           <StatusIndicator
             status={status}
-            isConnected={botStatus === 'running'}
+            isConnected={isConnected}
             wsStatus={{
-              audioConnected: botStatus === 'running',
+              audioConnected: false, // Not controlling bot audio
               transcriptConnected: isConnected,
               lastMessageTime,
               reconnectAttempts
@@ -303,10 +231,12 @@ export default function SidePanel() {
         {/* System Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-gradient-to-r from-[#141244]/60 to-[#1a1458]/40 backdrop-blur-md rounded-xl p-4 border border-[#803ceb]/20">
-            <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Bot Status</div>
+            <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Transcript Status</div>
             <div className="flex items-center gap-2">
-              <AIOrb isActive={botStatus === 'running'} size="w-2 h-2" />
-              <span className="text-white/90 text-sm capitalize">{botStatus}</span>
+              <AIOrb isActive={isConnected} size="w-2 h-2" />
+              <span className="text-white/90 text-sm capitalize">
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </span>
             </div>
           </div>
 
@@ -333,64 +263,68 @@ export default function SidePanel() {
           <div className="bg-gradient-to-r from-[#141244]/60 to-[#1a1458]/40 backdrop-blur-md rounded-xl p-4 border border-[#803ceb]/20">
             <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Session</div>
             <div className="flex items-center gap-2">
-              <AIOrb isActive={botStatus === 'running'} size="w-2 h-2" />
+              <AIOrb isActive={isConnected} size="w-2 h-2" />
               <span className="text-white/90 text-sm">
-                {botStatus === 'running' ? formatDuration(sessionDuration) : '0:00'}<br />
                 {transcripts.length} transcripts
               </span>
             </div>
           </div>
         </div>
 
+        {/* Meeting Information */}
+        {meetingInfo && (
+          <Card title="Meeting Information" glowing={true} className="mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="text-sm text-white/60 mb-1">Meeting Code</div>
+                <div className="text-white font-mono">{meetingInfo.meetingCode || 'N/A'}</div>
+              </div>
+              <div>
+                <div className="text-sm text-white/60 mb-1">Participants</div>
+                <div className="text-white">
+                  {meetingInfo.participants ? meetingInfo.participants.length : 'Unknown'}
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Control Panel */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <Card title="Bot Control" glowing={botStatus === 'running'}>
+          <Card title="Transcript Controls" glowing={isConnected}>
             <div className="space-y-4">
-              {botStatus === 'idle' || botStatus === 'error' ? (
-                <div className="space-y-3">
-                  <p className="text-white/70 text-sm">
-                    Start the bot to join this meeting and capture audio for AI-powered transcription and analysis.
-                  </p>
+              <div className="space-y-3">
+                <p className="text-white/70 text-sm">
+                  Listening to real-time transcripts from the meeting. The bot runs independently and streams transcripts here.
+                </p>
+                <div className="flex gap-2">
                   <Button
-                    onClick={handleStartBot}
-                    disabled={loading || !addonSession}
-                    loading={loading}
+                    onClick={() => connect()}
+                    disabled={isConnected || loading}
+                    loading={loading && isConnected}
                     variant="success"
+                    className="flex-1"
                   >
-                    Start Bot & AI Analysis
+                    {isConnected ? 'Connected' : 'Connect'}
                   </Button>
-                  {botStatus === 'error' && (
-                    <p className="text-red-400 text-xs">
-                      Failed to start bot. Check backend connection.
-                    </p>
-                  )}
-                </div>
-              ) : botStatus === 'starting' ? (
-                <div className="text-center py-4">
-                  <AIOrb isActive={true} size="w-12 h-12 mx-auto mb-2" />
-                  <p className="text-white/70 text-sm">Bot is starting and joining the meeting...</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 mb-3">
-                    <p className="text-green-400 text-sm flex items-center gap-2">
-                      <AIOrb isActive={true} size="w-3 h-3" />
-                      Bot is active and capturing audio
-                    </p>
-                  </div>
                   <Button
-                    onClick={handleStopBot}
-                    disabled={loading}
-                    loading={loading}
-                    variant="danger"
+                    onClick={() => disconnect()}
+                    disabled={!isConnected}
+                    variant="secondary"
+                    className="flex-1"
                   >
-                    Stop Bot & Analysis
-                  </Button>
-                  <Button onClick={clearTranscripts} variant="secondary" className="w-full">
-                    Clear Transcripts
+                    Disconnect
                   </Button>
                 </div>
-              )}
+                <Button onClick={clearTranscripts} variant="secondary" className="w-full">
+                  Clear Transcripts
+                </Button>
+                {!isConnected && (
+                  <p className="text-yellow-400 text-xs">
+                    {connectionStatus}
+                  </p>
+                )}
+              </div>
             </div>
           </Card>
 
@@ -405,12 +339,12 @@ export default function SidePanel() {
                 Open Main Stage
               </Button>
               <Button
-                onClick={getMeetingInfo}
+                onClick={refreshMeetingInfo}
                 disabled={!sidePanelClient}
                 variant="secondary"
                 className="w-full"
               >
-                Get Meeting Info
+                Refresh Meeting Info
               </Button>
               <p className="text-white/50 text-xs mt-2">
                 Main stage displays transcripts to all participants in the meeting.
@@ -420,7 +354,7 @@ export default function SidePanel() {
         </div>
 
         {/* Transcripts and Analysis Stream */}
-        <Card title="Real-time Transcripts & Insights" glowing={botStatus === 'running'}>
+        <Card title="Real-time Transcripts & Insights" glowing={isConnected}>
           <div className="flex justify-between items-center mb-4">
             <div className="text-sm text-white/60">
               {transcripts.length} transcript{transcripts.length !== 1 ? 's' : ''} •
@@ -436,21 +370,16 @@ export default function SidePanel() {
           <div className="h-96 overflow-y-auto space-y-4 p-2 pr-4 custom-scrollbar">
             {transcripts.length === 0 && (
               <div className="text-center p-10 text-white/50">
-                {botStatus === 'running' ? (
+                {isConnected ? (
                   <>
                     <AIOrb isActive={true} size="w-16 h-16 mx-auto mb-4" />
-                    <p className="mb-2">Bot is listening for audio...</p>
-                    <p className="text-sm">Transcripts will appear here as participants speak.</p>
-                    {!isConnected && (
-                      <p className="text-sm text-yellow-400 mt-2">
-                        {connectionStatus}
-                      </p>
-                    )}
+                    <p className="mb-2">Listening for transcripts...</p>
+                    <p className="text-sm">Transcripts will appear here as the bot processes meeting audio.</p>
                   </>
                 ) : (
                   <>
-                    <p className="mb-2">Start the bot to begin capturing transcripts</p>
-                    <p className="text-sm">Real-time transcripts and Gemini AI insights will appear here.</p>
+                    <p className="mb-2">Connect to start receiving transcripts</p>
+                    <p className="text-sm">Real-time transcripts and AI insights will appear here.</p>
                   </>
                 )}
               </div>
