@@ -65,7 +65,6 @@ export default function MainStage() {
         };
 
         setTranscripts((prev) => {
-            // Only keep final transcripts in the transcripts panel
             if (data.message_type === 'final_transcript' || data.message_type === 'enriched_transcript') {
                 const otherTranscripts = prev.filter(t =>
                     !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
@@ -75,7 +74,6 @@ export default function MainStage() {
             return prev;
         });
 
-        // Handle analysis data
         if (data.analysis && (data.message_type === 'enriched_transcript' || data.message_type === 'analysis')) {
             const newAnalysis: Analysis = {
                 summary: data.analysis.summary || 'No summary available',
