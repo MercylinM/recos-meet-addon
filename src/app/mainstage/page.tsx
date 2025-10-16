@@ -21,10 +21,21 @@ interface Transcript {
     };
 }
 
+interface Analysis {
+    summary: string;
+    keyPoints: string[];
+    actionItems: string[];
+    sentiment: 'positive' | 'negative' | 'neutral';
+    confidence: number;
+    timestamp: number;
+}
+
 export default function MainStage() {
     const [transcripts, setTranscripts] = useState<Transcript[]>([]);
+    const [analyses, setAnalyses] = useState<Analysis[]>([]);
     const [sessionStartTime, setSessionStartTime] = useState<number>(Date.now());
     const transcriptsEndRef = useRef<HTMLDivElement>(null);
+    const analysesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const initializeMainStage = async () => {
@@ -54,22 +65,29 @@ export default function MainStage() {
         };
 
         setTranscripts((prev) => {
-            if (data.message_type === 'interim_transcript') {
-                const otherTranscripts = prev.filter(t =>
-                    !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
-                );
-                return [...otherTranscripts, newTranscript];
-            }
-
+            // Only keep final transcripts in the transcripts panel
             if (data.message_type === 'final_transcript' || data.message_type === 'enriched_transcript') {
                 const otherTranscripts = prev.filter(t =>
                     !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
                 );
                 return [...otherTranscripts, newTranscript];
             }
-
-            return [...prev, newTranscript];
+            return prev;
         });
+
+        // Handle analysis data
+        if (data.analysis && (data.message_type === 'enriched_transcript' || data.message_type === 'analysis')) {
+            const newAnalysis: Analysis = {
+                summary: data.analysis.summary || 'No summary available',
+                keyPoints: data.analysis.keyPoints || data.analysis.keywords || [],
+                actionItems: data.analysis.actionItems || data.analysis.questions || [],
+                sentiment: data.analysis.sentiment || 'neutral',
+                confidence: data.analysis.confidence || 0.8,
+                timestamp: data.timestamp || Date.now()
+            };
+
+            setAnalyses(prev => [newAnalysis, ...prev]);
+        }
     }, []);
 
     const { isConnected, connectionStatus } = useTranscriptStream(handleTranscriptReceived);
@@ -77,6 +95,10 @@ export default function MainStage() {
     useEffect(() => {
         transcriptsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcripts]);
+
+    useEffect(() => {
+        analysesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [analyses]);
 
     const sessionDuration = Math.floor((Date.now() - sessionStartTime) / 1000);
 
@@ -91,6 +113,22 @@ export default function MainStage() {
         ];
         const hash = speaker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
         return colors[hash % colors.length];
+    };
+
+    const getSentimentColor = (sentiment: string) => {
+        switch (sentiment) {
+            case 'positive': return 'from-green-500 to-green-600';
+            case 'negative': return 'from-red-500 to-red-600';
+            default: return 'from-gray-500 to-gray-600';
+        }
+    };
+
+    const getSentimentText = (sentiment: string) => {
+        switch (sentiment) {
+            case 'positive': return 'Positive';
+            case 'negative': return 'Negative';
+            default: return 'Neutral';
+        }
     };
 
     return (
@@ -138,158 +176,192 @@ export default function MainStage() {
                             </div>
                         </div>
 
-                        {/* Transcript Count */}
+                        {/* Stats */}
                         <div className="bg-[#141244]/60 backdrop-blur-md rounded-xl px-6 py-3 border border-[#803ceb]/20">
                             <div className="flex items-center gap-3">
                                 <svg className="w-4 h-4 text-[#803ceb]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
                                 <span className="text-white/90 text-sm font-medium">
-                                    {transcripts.length} transcripts
+                                    {transcripts.length} transcripts • {analyses.length} insights
                                 </span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Transcripts Feed */}
-                <div className="flex-1 overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-[#141244]/40 to-[#1a1458]/30 backdrop-blur-md rounded-2xl border border-[#803ceb]/20 p-6 overflow-y-auto custom-scrollbar">
-                        {transcripts.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-center">
-                                <AIOrb isActive={isConnected} size="w-24 h-24 mb-6" />
-                                <h2 className="text-3xl font-bold text-white/90 mb-4">
-                                    {isConnected ? 'Listening for audio...' : 'Waiting for connection...'}
-                                </h2>
-                                <p className="text-white/60 text-xl max-w-2xl">
-                                    Transcripts and AI insights will appear here in real-time as participants speak.
-                                </p>
+                {/* Main Content - Split Layout */}
+                <div className="flex-1 flex gap-6 overflow-hidden">
+                    {/* Left Panel - Analysis (70% width) */}
+                    <div className="flex-1 flex flex-col">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#803ceb] to-[#a855f7] flex items-center justify-center">
+                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
                             </div>
-                        ) : (
-                            <div className="space-y-6">
-                                {transcripts.map((transcript, index) => (
-                                    <div
-                                        key={`${transcript.timestamp}-${index}`}
-                                        className={`group ${transcript.messageType === 'interim_transcript'
-                                                ? 'opacity-60'
-                                                : 'opacity-100'
-                                            } transition-opacity duration-300`}
-                                    >
-                                        {/* Speaker Header */}
-                                        <div className="flex items-center gap-3 mb-3">
-                                            <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getSpeakerColor(transcript.speaker)} flex items-center justify-center text-white font-bold shadow-lg`}>
-                                                {transcript.speaker.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div className="flex-1">
+                            <h2 className="text-2xl font-bold text-white">Gemini AI Analysis</h2>
+                        </div>
+
+                        <div className="flex-1 bg-gradient-to-r from-[#141244]/40 to-[#1a1458]/30 backdrop-blur-md rounded-2xl border border-[#803ceb]/20 p-6 overflow-y-auto custom-scrollbar">
+                            {analyses.length === 0 ? (
+                                <div className="h-full flex flex-col items-center justify-center text-center">
+                                    <AIOrb isActive={isConnected} size="w-20 h-20 mb-4" />
+                                    <h3 className="text-2xl font-bold text-white/90 mb-3">
+                                        {isConnected ? 'Analyzing conversation...' : 'Waiting for analysis...'}
+                                    </h3>
+                                    <p className="text-white/60 text-lg max-w-md">
+                                        Gemini AI insights will appear here as the meeting progresses.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    {analyses.map((analysis, index) => (
+                                        <div
+                                            key={`${analysis.timestamp}-${index}`}
+                                            className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#803ceb]/30 transition-all duration-300"
+                                        >
+                                            {/* Analysis Header */}
+                                            <div className="flex items-center justify-between mb-4">
                                                 <div className="flex items-center gap-3">
-                                                    <span className="text-white font-semibold text-lg">
-                                                        {transcript.speaker}
-                                                    </span>
-                                                    <span className="text-white/40 text-sm">
-                                                        {new Date(transcript.timestamp).toLocaleTimeString()}
-                                                    </span>
-                                                    {transcript.messageType === 'interim_transcript' && (
-                                                        <span className="text-yellow-400 text-xs px-2 py-1 bg-yellow-400/10 rounded-full border border-yellow-400/20">
-                                                            Transcribing...
-                                                        </span>
-                                                    )}
+                                                    <div className={`w-10 h-10 rounded-full bg-gradient-to-r ${getSentimentColor(analysis.sentiment)} flex items-center justify-center text-white font-bold shadow-lg`}>
+                                                        {analysis.sentiment.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-white font-semibold">
+                                                            {getSentimentText(analysis.sentiment)} Analysis
+                                                        </div>
+                                                        <div className="text-white/40 text-sm">
+                                                            {new Date(analysis.timestamp).toLocaleTimeString()}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="text-white/60 text-sm">Confidence:</div>
+                                                    <div className="px-3 py-1 bg-gradient-to-r from-[#803ceb]/20 to-[#a855f7]/20 rounded-full text-[#803ceb] text-sm font-medium border border-[#803ceb]/30">
+                                                        {Math.round(analysis.confidence * 100)}%
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        {/* Transcript Text */}
-                                        <div className="ml-13 bg-white/5 backdrop-blur-sm rounded-xl p-5 border border-white/10 hover:border-[#803ceb]/30 transition-colors">
-                                            <p className="text-white/90 text-lg leading-relaxed">
-                                                {transcript.text}
-                                            </p>
+                                            {/* Summary */}
+                                            <div className="mb-6">
+                                                <div className="flex items-center gap-2 mb-3">
+                                                    <svg className="w-5 h-5 text-[#803ceb]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                                    </svg>
+                                                    <span className="text-[#803ceb] font-semibold text-lg">Summary</span>
+                                                </div>
+                                                <p className="text-white/90 text-lg leading-relaxed bg-[#803ceb]/5 rounded-lg p-4 border border-[#803ceb]/10">
+                                                    {analysis.summary}
+                                                </p>
+                                            </div>
 
-                                            {/* AI Analysis */}
-                                            {transcript.analysis && transcript.messageType === 'enriched_transcript' && (
-                                                <div className="mt-5 pt-5 border-t border-white/10 space-y-4">
-                                                    {/* Summary */}
-                                                    {transcript.analysis.summary && (
-                                                        <div className="bg-[#803ceb]/10 rounded-lg p-4 border border-[#803ceb]/20">
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <svg className="w-4 h-4 text-[#803ceb]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                                                </svg>
-                                                                <span className="text-[#803ceb] font-semibold text-sm uppercase tracking-wide">
-                                                                    AI Summary
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-white/80 text-base">
-                                                                {transcript.analysis.summary}
-                                                            </p>
-                                                        </div>
-                                                    )}
+                                            {/* Key Points */}
+                                            {analysis.keyPoints.length > 0 && (
+                                                <div className="mb-6">
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                        <span className="text-green-400 font-semibold text-lg">Key Points</span>
+                                                    </div>
+                                                    <ul className="space-y-2">
+                                                        {analysis.keyPoints.map((point, i) => (
+                                                            <li key={i} className="text-white/80 text-base flex items-start gap-3 bg-green-500/5 rounded-lg p-3 border border-green-500/10">
+                                                                <span className="text-green-400 font-bold mt-1">•</span>
+                                                                <span>{point}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
 
-                                                    {/* Keywords */}
-                                                    {transcript.analysis.keywords && transcript.analysis.keywords.length > 0 && (
-                                                        <div className="flex flex-wrap gap-2">
-                                                            <span className="text-white/60 text-sm font-medium">Keywords:</span>
-                                                            {transcript.analysis.keywords.map((keyword, i) => (
-                                                                <span
-                                                                    key={i}
-                                                                    className="px-3 py-1 bg-gradient-to-r from-[#803ceb]/20 to-[#a855f7]/20 rounded-full text-[#803ceb] text-sm font-medium border border-[#803ceb]/30"
-                                                                >
-                                                                    {keyword}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    )}
-
-                                                    {/* Follow-up Questions */}
-                                                    {transcript.analysis.questions && transcript.analysis.questions.length > 0 && (
-                                                        <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/20">
-                                                            <div className="flex items-center gap-2 mb-3">
-                                                                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                </svg>
-                                                                <span className="text-blue-400 font-semibold text-sm uppercase tracking-wide">
-                                                                    Suggested Follow-ups
-                                                                </span>
-                                                            </div>
-                                                            <ul className="space-y-2">
-                                                                {transcript.analysis.questions.map((question, i) => (
-                                                                    <li key={i} className="text-white/80 text-base flex items-start gap-2">
-                                                                        <span className="text-blue-400 font-bold">•</span>
-                                                                        <span>{question}</span>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Confidence Score */}
-                                                    {transcript.analysis.confidence && (
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-white/60 text-sm">AI Confidence:</span>
-                                                            <div className="flex-1 max-w-xs bg-white/10 rounded-full h-2 overflow-hidden">
-                                                                <div
-                                                                    className="h-full bg-gradient-to-r from-[#803ceb] to-[#a855f7] rounded-full transition-all duration-500"
-                                                                    style={{ width: `${transcript.analysis.confidence * 100}%` }}
-                                                                />
-                                                            </div>
-                                                            <span className="text-white/90 text-sm font-medium">
-                                                                {Math.round(transcript.analysis.confidence * 100)}%
-                                                            </span>
-                                                        </div>
-                                                    )}
+                                            {/* Action Items */}
+                                            {analysis.actionItems.length > 0 && (
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                                        </svg>
+                                                        <span className="text-orange-400 font-semibold text-lg">Action Items</span>
+                                                    </div>
+                                                    <ul className="space-y-2">
+                                                        {analysis.actionItems.map((item, i) => (
+                                                            <li key={i} className="text-white/80 text-base flex items-start gap-3 bg-orange-500/5 rounded-lg p-3 border border-orange-500/10">
+                                                                <span className="text-orange-400 font-bold mt-1">•</span>
+                                                                <span>{item}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
-                                ))}
-                                <div ref={transcriptsEndRef} />
+                                    ))}
+                                    <div ref={analysesEndRef} />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Right Panel - Final Transcripts (30% width) */}
+                    <div className="w-1/3 flex flex-col">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
+                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
                             </div>
-                        )}
+                            <h2 className="text-2xl font-bold text-white">Final Transcripts</h2>
+                        </div>
+
+                        <div className="flex-1 bg-gradient-to-r from-[#141244]/40 to-[#1a1458]/30 backdrop-blur-md rounded-2xl border border-blue-500/20 p-6 overflow-y-auto custom-scrollbar">
+                            {transcripts.length === 0 ? (
+                                <div className="h-full flex flex-col items-center justify-center text-center">
+                                    <svg className="w-12 h-12 text-blue-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <p className="text-white/60 text-base">
+                                        Final transcripts will appear here as they are processed.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {transcripts.map((transcript, index) => (
+                                        <div
+                                            key={`${transcript.timestamp}-${index}`}
+                                            className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/10 hover:border-blue-500/30 transition-colors"
+                                        >
+                                            {/* Speaker Header */}
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getSpeakerColor(transcript.speaker)} flex items-center justify-center text-white font-bold text-sm`}>
+                                                    {transcript.speaker.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-white font-semibold text-sm">
+                                                            {transcript.speaker}
+                                                        </span>
+                                                        <span className="text-white/40 text-xs">
+                                                            {new Date(transcript.timestamp).toLocaleTimeString()}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Transcript Text */}
+                                            <p className="text-white/80 text-sm leading-relaxed">
+                                                {transcript.text}
+                                            </p>
+                                        </div>
+                                    ))}
+                                    <div ref={transcriptsEndRef} />
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
-
-                
             </div>
-
-           
         </div>
     );
 }
