@@ -75,17 +75,17 @@ export default function SidePanel() {
         const otherTranscripts = prev.filter(t =>
           !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
         );
-        return [newTranscript, ...otherTranscripts];
+        return [...otherTranscripts, newTranscript];
       }
 
       if (data.message_type === 'final_transcript' || data.message_type === 'enriched_transcript') {
         const otherTranscripts = prev.filter(t =>
           !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
         );
-        return [newTranscript, ...otherTranscripts];
+        return [...otherTranscripts, newTranscript];
       }
 
-      return [newTranscript, ...prev];
+      return [...prev, newTranscript];
     });
   }, []);
 
