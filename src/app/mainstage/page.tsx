@@ -198,7 +198,7 @@ export default function MainStage() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                                 </svg>
                             </div>
-                            <h2 className="text-2xl font-bold text-white">Gemini AI Analysis</h2>
+                            <h2 className="text-2xl font-bold text-white">AI Analysis</h2>
                         </div>
 
                         <div className="flex-1 bg-gradient-to-r from-[#141244]/40 to-[#1a1458]/30 backdrop-blur-md rounded-2xl border border-[#803ceb]/20 p-6 overflow-y-auto custom-scrollbar">
@@ -209,7 +209,7 @@ export default function MainStage() {
                                         {isConnected ? 'Analyzing conversation...' : 'Waiting for analysis...'}
                                     </h3>
                                     <p className="text-white/60 text-lg max-w-md">
-                                        Gemini AI insights will appear here as the meeting progresses.
+                                        AI insights will appear here as the meeting progresses.
                                     </p>
                                 </div>
                             ) : (
@@ -310,7 +310,7 @@ export default function MainStage() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
                             </div>
-                            <h2 className="text-2xl font-bold text-white">Final Transcripts</h2>
+                            <h2 className="text-2xl font-bold text-white">Transcripts</h2>
                         </div>
 
                         <div className="flex-1 bg-gradient-to-r from-[#141244]/40 to-[#1a1458]/30 backdrop-blur-md rounded-2xl border border-blue-500/20 p-6 overflow-y-auto custom-scrollbar">
