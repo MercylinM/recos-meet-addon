@@ -7,11 +7,11 @@ import { AIOrb } from '../components/AIOrb';
 import { StatusIndicator } from '../components/StatusIndicator';
 import { formatBytes, formatDuration } from '../utils/formatters';
 import { Card } from '../components/Card';
-import { Button } from '../components/Button';
 import { TranscriptEntry } from '../components/TranscriptEntry';
 import { MeetingSession, Transcript } from '../types';
 import { useTranscriptStream } from '../hooks/useTranscriptStream';
 import { meet } from '@googleworkspace/meet-addons/meet.addons';
+import { Button } from '../components/Button';
 
 export default function SidePanel() {
   const [addonSession, setAddonSession] = useState<any>(null);
@@ -58,8 +58,40 @@ export default function SidePanel() {
   }, []);
 
   const handleTranscriptReceived = useCallback((data: any) => {
+    console.log('📥 Received WebSocket message:', data);
+
+    // Handle analysis messages (Gemini insights)
+    if (data.type === 'analysis') {
+      console.log('Processing analysis data:', data);
+
+      const analysisTranscript: Transcript = {
+        speaker: data.speaker || 'AI Analysis',
+        text: data.candidate_answer || data.transcript || '',
+        analysis: {
+          summary: data.analysis?.candidate_answer_summary,
+          semantics: data.analysis?.semantics,
+          questions: data.analysis?.questions || [],
+          confidence: data.analysis?.confidence || 0,
+          keywords: data.analysis?.keywords || [],
+          answer_quality: data.analysis?.answer_quality,
+          detected_question: data.analysis?.detected_question
+        },
+        timestamp: data.timestamp || Date.now(),
+        isFinal: true,
+        messageType: 'analysis',
+        segmentLength: data.candidate_answer?.length || 0,
+        analysisTimestamp: Date.now(),
+        question: data.question,
+        interview_id: data.interview_id
+      };
+
+      setTranscripts((prev) => [...prev, analysisTranscript]);
+      return;
+    }
+
+    // Handle regular transcript messages
     const newTranscript: Transcript = {
-      speaker: data.speaker_name || 'Unknown Speaker',
+      speaker: data.speaker_name || 'Unknown',
       text: data.transcript,
       analysis: data.analysis,
       timestamp: data.timestamp || Date.now(),
@@ -109,7 +141,7 @@ export default function SidePanel() {
         setStatus('Connecting to transcript stream...');
         await connect();
         setStatus('Ready - Listening for transcripts');
-        setBotStatus('running'); // Set as running since we're listening to transcripts
+        setBotStatus('running');
       } catch (error) {
         console.error('Failed to connect to transcript stream:', error);
         setStatus('Failed to connect to transcripts');
@@ -119,7 +151,6 @@ export default function SidePanel() {
 
     initializeTranscriptStream();
 
-    // Cleanup on unmount
     return () => {
       disconnect();
     };
@@ -161,7 +192,7 @@ export default function SidePanel() {
         mainStageUrl: mainStageUrl,
         additionalData: JSON.stringify({
           timestamp: Date.now(),
-          transcripts: transcripts.slice(0, 10) // Send recent transcripts
+          transcripts: transcripts.slice(0, 10)
         })
       });
       setStatus('Main stage opened for all participants');
@@ -213,88 +244,13 @@ export default function SidePanel() {
           <p className="text-white/60 text-lg">Real-time meeting intelligence & analysis</p>
         </div>
 
-        {/* Status Dashboard */}
-        {/* <div className="mb-8">
-          <StatusIndicator
-            status={status}
-            isConnected={isConnected}
-            wsStatus={{
-              audioConnected: false, // Not controlling bot audio
-              transcriptConnected: isConnected,
-              lastMessageTime,
-              reconnectAttempts
-            }}
-          />
-        </div> */}
-
-        {/* System Metrics */}
-        {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-gradient-to-r from-[#141244]/60 to-[#1a1458]/40 backdrop-blur-md rounded-xl p-4 border border-[#803ceb]/20">
-            <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Transcript Status</div>
-            <div className="flex items-center gap-2">
-              <AIOrb isActive={isConnected} size="w-2 h-2" />
-              <span className="text-white/90 text-sm capitalize">
-                {isConnected ? 'Connected' : 'Disconnected'}
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-r from-[#141244]/60 to-[#1a1458]/40 backdrop-blur-md rounded-xl p-4 border border-[#803ceb]/20">
-            <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Data Received</div>
-            <div className="flex items-center gap-2">
-              <AIOrb isActive={bytesReceived > 0} size="w-2 h-2" />
-              <span className="text-white/90 text-sm">
-                ↓{formatBytes(bytesReceived)}
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-r from-[#141244]/60 to-[#1a1458]/40 backdrop-blur-md rounded-xl p-4 border border-[#803ceb]/20">
-            <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Connection</div>
-            <div className="flex items-center gap-2">
-              <AIOrb isActive={isConnected} size="w-2 h-2" />
-              <span className="text-white/90 text-sm text-ellipsis overflow-hidden">
-                {connectionStatus}
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-r from-[#141244]/60 to-[#1a1458]/40 backdrop-blur-md rounded-xl p-4 border border-[#803ceb]/20">
-            <div className="text-xs text-[#803ceb] uppercase tracking-wide mb-1">Session</div>
-            <div className="flex items-center gap-2">
-              <AIOrb isActive={isConnected} size="w-2 h-2" />
-              <span className="text-white/90 text-sm">
-                {transcripts.length} transcripts
-              </span>
-            </div>
-          </div>
-        </div> */}
-
-        {/* Meeting Information */}
-        {/* {meetingInfo && (
-          <Card title="Meeting Information" glowing={true} className="mb-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm text-white/60 mb-1">Meeting Code</div>
-                <div className="text-white font-mono">{meetingInfo.meetingCode || 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-sm text-white/60 mb-1">Participants</div>
-                <div className="text-white">
-                  {meetingInfo.participants ? meetingInfo.participants.length : 'Unknown'}
-                </div>
-              </div>
-            </div>
-          </Card>
-        )} */}
-
         {/* Control Panel */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <Card title="Transcript Controls" glowing={isConnected}>
             <div className="space-y-4">
               <div className="space-y-3">
                 <p className="text-white/70 text-sm">
-                  Listening to real-time transcripts from the meeting. The bot runs independently and streams transcripts here.
+                  Listening to real-time transcripts and AI analysis from the meeting.
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -316,7 +272,7 @@ export default function SidePanel() {
                   </Button>
                 </div>
                 <Button onClick={clearTranscripts} variant="secondary" className="w-full">
-                  Clear Transcripts
+                  Clear All
                 </Button>
                 {!isConnected && (
                   <p className="text-yellow-400 text-xs">
@@ -346,17 +302,17 @@ export default function SidePanel() {
                 Refresh Meeting Info
               </Button>
               <p className="text-white/50 text-xs mt-2">
-                Main stage displays transcripts to all participants in the meeting.
+                Main stage displays transcripts and AI insights to all participants.
               </p>
             </div>
           </Card>
         </div>
 
         {/* Transcripts and Analysis Stream */}
-        <Card title="Real-time Transcripts & Insights" glowing={isConnected}>
+        <Card title="Real-time Transcripts & AI Insights" glowing={isConnected}>
           <div className="flex justify-between items-center mb-4">
             <div className="text-sm text-white/60">
-              {transcripts.length} transcript{transcripts.length !== 1 ? 's' : ''} •
+              {transcripts.length} message{transcripts.length !== 1 ? 's' : ''} •
               Last update: {lastMessageTime ? new Date(lastMessageTime).toLocaleTimeString() : 'Never'}
             </div>
             {transcripts.length > 0 && (
@@ -372,13 +328,13 @@ export default function SidePanel() {
                 {isConnected ? (
                   <>
                     <AIOrb isActive={true} size="w-16 h-16 mx-auto mb-4" />
-                    <p className="mb-2">Listening for transcripts...</p>
-                    <p className="text-sm">Transcripts will appear here as the bot processes meeting audio.</p>
+                    <p className="mb-2">Listening for transcripts and AI analysis...</p>
+                    <p className="text-sm">Regular transcripts and AI insights will appear here as the meeting progresses.</p>
                   </>
                 ) : (
                   <>
-                    <p className="mb-2">Connect to start receiving transcripts</p>
-                    <p className="text-sm">Real-time transcripts and AI insights will appear here.</p>
+                    <p className="mb-2">Connect to start receiving real-time insights</p>
+                    <p className="text-sm">Transcripts and AI analysis will appear here automatically.</p>
                   </>
                 )}
               </div>
@@ -386,13 +342,30 @@ export default function SidePanel() {
 
             <div className="space-y-4">
               {transcripts.map((transcript, index) => (
-                <TranscriptEntry key={`${transcript.timestamp}-${index}`} transcript={transcript} />
+                <TranscriptEntry
+                  key={`${transcript.timestamp}-${index}`}
+                  transcript={transcript}
+                  showSpeaker={false} // Remove speaker labels as requested
+                />
               ))}
             </div>
 
             <div ref={transcriptsEndRef} />
           </div>
         </Card>
+
+        {/* Debug Info - Remove in production */}
+        {/* <Card title="Debug Info" className="mt-6">
+          <div className="space-y-2 text-sm">
+            <div>WebSocket ConnecteanscriConnected ? 'Connected' : 'Disconnected'</div>
+            <div>Connection Status: {connectionStatus}</div>
+            <div>Last Message: {lastMessageTime ? new Date(lastMessageTime).toLocaleTimeString() : 'Never'}</div>
+            <div>Reconnect Attempts: {reconnectAttempts}</div>
+            <div>Data Received: {formatBytes(bytesReceived)}</div>
+            <div>Transcript Count: {transcripts.length}</div>
+            <div>Analysis Messages: {transcripts.filter(t => t.messageType === 'analysis').length}</div>
+          </div>
+        </Card> */}
       </div>
     </div>
   );

@@ -10,12 +10,22 @@ export interface GeminiAnalysis {
 export interface Transcript {
     speaker: string;
     text: string;
-    analysis?: GeminiAnalysis;
+    analysis?: {
+        summary?: string;
+        semantics?: string;
+        questions?: string[];
+        confidence?: number;
+        keywords?: string[];
+        answer_quality?: string;
+        detected_question?: string;
+    };
     timestamp: number;
     isFinal: boolean;
     messageType?: string;
     segmentLength?: number;
     analysisTimestamp?: number;
+    question?: string;
+    interview_id?: number;
 }
 
 export interface AudioMetrics {
