@@ -345,7 +345,7 @@ export default function SidePanel() {
                 <TranscriptEntry
                   key={`${transcript.timestamp}-${index}`}
                   transcript={transcript}
-                  showSpeaker={false} // Remove speaker labels as requested
+                  showSpeaker={false} 
                 />
               ))}
             </div>
