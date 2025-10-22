@@ -57,67 +57,113 @@ export default function SidePanel() {
     initializeAddon();
   }, []);
 
-  const handleTranscriptReceived = useCallback((data: any) => {
-    console.log('📥 Received WebSocket message:', data);
+  // const handleTranscriptReceived = useCallback((data: any) => {
+  //   console.log('📥 Received WebSocket message:', data);
 
-    // Handle analysis messages (Gemini insights)
+  //   // Handle analysis messages (Gemini insights)
+  //   if (data.type === 'analysis') {
+  //     console.log('Processing analysis data:', data);
+
+  //     const analysisTranscript: Transcript = {
+  //       speaker: data.speaker || 'AI Analysis',
+  //       text: data.candidate_answer || data.transcript || '',
+  //       analysis: {
+  //         summary: data.analysis?.candidate_answer_summary,
+  //         semantics: data.analysis?.semantics,
+  //         questions: data.analysis?.questions || [],
+  //         confidence: data.analysis?.confidence || 0,
+  //         keywords: data.analysis?.keywords || [],
+  //         answer_quality: data.analysis?.answer_quality,
+  //         detected_question: data.analysis?.detected_question
+  //       },
+  //       timestamp: data.timestamp || Date.now(),
+  //       isFinal: true,
+  //       messageType: 'analysis',
+  //       segmentLength: data.candidate_answer?.length || 0,
+  //       analysisTimestamp: Date.now(),
+  //       question: data.question,
+  //       interview_id: data.interview_id
+  //     };
+
+  //     setTranscripts((prev) => [...prev, analysisTranscript]);
+  //     return;
+  //   }
+
+  //   // Handle regular transcript messages
+  //   const newTranscript: Transcript = {
+  //     speaker: data.speaker_name || 'Unknown',
+  //     text: data.transcript,
+  //     analysis: data.analysis,
+  //     timestamp: data.timestamp || Date.now(),
+  //     isFinal: data.is_final || false,
+  //     messageType: data.message_type,
+  //     segmentLength: data.transcript?.length,
+  //     analysisTimestamp: data.analysis_timestamp
+  //   };
+
+  //   setTranscripts((prev) => {
+  //     if (data.message_type === 'interim_transcript') {
+  //       const otherTranscripts = prev.filter(t =>
+  //         !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
+  //       );
+  //       return [...otherTranscripts, newTranscript];
+  //     }
+
+  //     if (data.message_type === 'final_transcript' || data.message_type === 'enriched_transcript') {
+  //       const otherTranscripts = prev.filter(t =>
+  //         !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
+  //       );
+  //       return [...otherTranscripts, newTranscript];
+  //     }
+
+  //     return [...prev, newTranscript];
+  //   });
+  // }, []);
+
+  // In your SidePanel component, simplify the handleTranscriptReceived function:
+  const handleTranscriptReceived = useCallback((data: any) => {
+    console.log('📥 RAW WebSocket data received:', data);
+
+    // Handle analysis messages
     if (data.type === 'analysis') {
-      console.log('Processing analysis data:', data);
+      console.log('🎯 ANALYSIS DATA:', {
+        question: data.question,
+        candidate_answer: data.candidate_answer,
+        analysis: data.analysis
+      });
 
       const analysisTranscript: Transcript = {
-        speaker: data.speaker || 'AI Analysis',
-        text: data.candidate_answer || data.transcript || '',
+        speaker: data.speaker || 'Candidate',
+        text: data.candidate_answer || 'No answer provided',
         analysis: {
-          summary: data.analysis?.candidate_answer_summary,
-          semantics: data.analysis?.semantics,
+          summary: data.analysis?.summary || 'No summary available',
+          semantics: data.analysis?.semantics || 'No semantic analysis',
           questions: data.analysis?.questions || [],
           confidence: data.analysis?.confidence || 0,
           keywords: data.analysis?.keywords || [],
-          answer_quality: data.analysis?.answer_quality,
-          detected_question: data.analysis?.detected_question
+          answer_quality: data.analysis?.answer_quality || 'unknown'
         },
-        timestamp: data.timestamp || Date.now(),
+        timestamp: Date.now(),
         isFinal: true,
         messageType: 'analysis',
-        segmentLength: data.candidate_answer?.length || 0,
-        analysisTimestamp: Date.now(),
-        question: data.question,
-        interview_id: data.interview_id
+        question: data.question
       };
 
       setTranscripts((prev) => [...prev, analysisTranscript]);
       return;
     }
 
-    // Handle regular transcript messages
-    const newTranscript: Transcript = {
-      speaker: data.speaker_name || 'Unknown',
-      text: data.transcript,
-      analysis: data.analysis,
-      timestamp: data.timestamp || Date.now(),
-      isFinal: data.is_final || false,
-      messageType: data.message_type,
-      segmentLength: data.transcript?.length,
-      analysisTimestamp: data.analysis_timestamp
-    };
+    if (data.transcript) {
+      const newTranscript: Transcript = {
+        speaker: data.speaker_name || 'Unknown',
+        text: data.transcript,
+        timestamp: data.timestamp || Date.now(),
+        isFinal: data.is_final || false,
+        messageType: data.message_type
+      };
 
-    setTranscripts((prev) => {
-      if (data.message_type === 'interim_transcript') {
-        const otherTranscripts = prev.filter(t =>
-          !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
-        );
-        return [...otherTranscripts, newTranscript];
-      }
-
-      if (data.message_type === 'final_transcript' || data.message_type === 'enriched_transcript') {
-        const otherTranscripts = prev.filter(t =>
-          !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
-        );
-        return [...otherTranscripts, newTranscript];
-      }
-
-      return [...prev, newTranscript];
-    });
+      setTranscripts((prev) => [...prev, newTranscript]);
+    }
   }, []);
 
   const {
@@ -134,7 +180,6 @@ export default function SidePanel() {
     transcriptsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcripts]);
 
-  // Auto-connect to transcript stream when component mounts
   useEffect(() => {
     const initializeTranscriptStream = async () => {
       try {
@@ -271,9 +316,9 @@ export default function SidePanel() {
                     Disconnect
                   </Button>
                 </div>
-                <Button onClick={clearTranscripts} variant="secondary" className="w-full">
+                {/* <Button onClick={clearTranscripts} variant="secondary" className="w-full">
                   Clear All
-                </Button>
+                </Button> */}
                 {!isConnected && (
                   <p className="text-yellow-400 text-xs">
                     {connectionStatus}
