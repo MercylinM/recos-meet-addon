@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, ReactNode } from 'react';
 import { meet } from '@googleworkspace/meet-addons/meet.addons';
 import { useTranscriptStream } from '../hooks/useTranscriptStream';
 import { AIOrb } from '../components/AIOrb';
@@ -22,11 +23,17 @@ interface Transcript {
 }
 
 interface Analysis {
-    summary: string;
-    keyPoints: string[];
-    actionItems: string[];
-    sentiment: 'positive' | 'negative' | 'neutral';
-    confidence: number;
+    actionItems: any;
+    keyPoints: any;
+    summary: ReactNode;
+    sentiment: string;
+    detected_question?: string;
+    candidate_answer_summary?: string;
+    semantics?: string;
+    questions?: string[];
+    confidence?: number;
+    keywords?: string[];
+    answer_quality?: 'excellent' | 'good' | 'fair' | 'poor' | 'unknown';
     timestamp: number;
 }
 
@@ -36,6 +43,15 @@ export default function MainStage() {
     const [sessionStartTime, setSessionStartTime] = useState<number>(Date.now());
     const transcriptsEndRef = useRef<HTMLDivElement>(null);
     const analysesEndRef = useRef<HTMLDivElement>(null);
+
+    // Debug effects
+    useEffect(() => {
+        console.log('Current transcripts:', transcripts);
+    }, [transcripts]);
+
+    useEffect(() => {
+        console.log('Current analyses:', analyses);
+    }, [analyses]);
 
     useEffect(() => {
         const initializeMainStage = async () => {
@@ -55,36 +71,75 @@ export default function MainStage() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleTranscriptReceived = useCallback((data: any) => {
-        const newTranscript: Transcript = {
-            speaker: data.speaker_name || 'Unknown Speaker',
-            text: data.transcript,
-            timestamp: data.timestamp || Date.now(),
-            isFinal: data.is_final || false,
-            messageType: data.message_type,
-            analysis: data.analysis
-        };
+        console.log('Received WebSocket data:', data);
 
-        setTranscripts((prev) => {
-            if (data.message_type === 'final_transcript' || data.message_type === 'enriched_transcript') {
-                const otherTranscripts = prev.filter(t =>
-                    !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
-                );
-                return [...otherTranscripts, newTranscript];
-            }
-            return prev;
-        });
+        // Handle regular transcripts (without analysis)
+        if (data.transcript && !data.analysis) {
+            const newTranscript: Transcript = {
+                speaker: data.speaker_name || 'Unknown Speaker',
+                text: data.transcript,
+                timestamp: data.timestamp || Date.now(),
+                isFinal: data.is_final || false,
+                messageType: data.message_type,
+                analysis: undefined
+            };
 
-        if (data.analysis && (data.message_type === 'enriched_transcript' || data.message_type === 'analysis')) {
+            setTranscripts((prev) => {
+                if (data.message_type === 'final_transcript' || data.message_type === 'enriched_transcript') {
+                    const otherTranscripts = prev.filter(t =>
+                        !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
+                    );
+                    return [...otherTranscripts, newTranscript];
+                }
+                return [...prev, newTranscript];
+            });
+        }
+
+        // Handle analysis data (from enriched transcripts or direct analysis)
+        if (data.analysis) {
+            const analysisData = data.analysis;
+
             const newAnalysis: Analysis = {
-                summary: data.analysis.summary || 'No summary available',
-                keyPoints: data.analysis.keyPoints || data.analysis.keywords || [],
-                actionItems: data.analysis.actionItems || data.analysis.questions || [],
-                sentiment: data.analysis.sentiment || 'neutral',
-                confidence: data.analysis.confidence || 0.8,
-                timestamp: data.timestamp || Date.now()
+                detected_question: analysisData.detected_question || '',
+                candidate_answer_summary: analysisData.candidate_answer_summary || 'No summary available',
+                semantics: analysisData.semantics || 'No semantic analysis available',
+                questions: analysisData.questions || [],
+                confidence: analysisData.confidence || 0.8,
+                keywords: analysisData.keywords || [],
+                answer_quality: analysisData.answer_quality || 'unknown',
+                timestamp: data.timestamp || Date.now(),
+                summary: analysisData.candidate_answer_summary || analysisData.semantics || 'No summary available',
+                keyPoints: analysisData.keywords || [],
+                actionItems: analysisData.questions || [],
+                sentiment: analysisData.answer_quality === 'excellent' || analysisData.answer_quality === 'good' ? 'positive' : analysisData.answer_quality === 'poor' ? 'negative' : 'neutral',
             };
 
             setAnalyses(prev => [newAnalysis, ...prev]);
+
+            // If this is an enriched transcript, also add it to transcripts with analysis
+            if (data.transcript) {
+                const enrichedTranscript: Transcript = {
+                    speaker: data.speaker_name || 'Unknown Speaker',
+                    text: data.transcript,
+                    timestamp: data.timestamp || Date.now(),
+                    isFinal: true,
+                    messageType: 'enriched_transcript',
+                    analysis: {
+                        summary: analysisData.candidate_answer_summary || analysisData.semantics || 'No summary available',
+                        keywords: analysisData.keywords || [],
+                        questions: analysisData.questions || [],
+                        semantics: analysisData.semantics || 'No semantic analysis available',
+                        confidence: analysisData.confidence || 0.8,
+                    }
+                };
+
+                setTranscripts(prev => {
+                    const otherTranscripts = prev.filter(t =>
+                        !(t.messageType === 'interim_transcript' && t.speaker === enrichedTranscript.speaker)
+                    );
+                    return [...otherTranscripts, enrichedTranscript];
+                });
+            }
         }
     }, []);
 
@@ -156,9 +211,14 @@ export default function MainStage() {
                         <div className="bg-[#141244]/60 backdrop-blur-md rounded-xl px-6 py-3 border border-[#803ceb]/20">
                             <div className="flex items-center gap-3">
                                 <AIOrb isActive={isConnected} size="w-3 h-3" />
-                                <span className="text-white/90 text-sm font-medium">
-                                    {isConnected ? 'Live' : connectionStatus}
-                                </span>
+                                <div className="flex flex-col">
+                                    <span className="text-white/90 text-sm font-medium">
+                                        {isConnected ? 'Live - Receiving Data' : connectionStatus}
+                                    </span>
+                                    {/* <span className="text-white/60 text-xs">
+                                        {transcripts.length} transcripts • {analyses.length} insights
+                                    </span> */}
+                                </div>
                             </div>
                         </div>
 
@@ -210,6 +270,7 @@ export default function MainStage() {
                                     </h3>
                                     <p className="text-white/60 text-lg max-w-md">
                                         AI insights will appear here as the meeting progresses.
+                                        {!isConnected}
                                     </p>
                                 </div>
                             ) : (
@@ -237,7 +298,7 @@ export default function MainStage() {
                                                 <div className="flex items-center gap-2">
                                                     <div className="text-white/60 text-sm">Confidence:</div>
                                                     <div className="px-3 py-1 bg-gradient-to-r from-[#803ceb]/20 to-[#a855f7]/20 rounded-full text-[#803ceb] text-sm font-medium border border-[#803ceb]/30">
-                                                        {Math.round(analysis.confidence * 100)}%
+                                                        {Math.round((analysis.confidence ?? 0) * 100)}%
                                                     </div>
                                                 </div>
                                             </div>
@@ -320,7 +381,10 @@ export default function MainStage() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
                                     <p className="text-white/60 text-base">
-                                        Final transcripts will appear here as they are processed.
+                                        {isConnected ? 'Listening for conversation...' : 'Waiting for connection...'}
+                                    </p>
+                                    <p className="text-white/40 text-sm mt-2">
+                                        Transcripts will appear here as they are processed.
                                     </p>
                                 </div>
                             ) : (
@@ -348,9 +412,43 @@ export default function MainStage() {
                                             </div>
 
                                             {/* Transcript Text */}
-                                            <p className="text-white/80 text-sm leading-relaxed">
+                                            <p className="text-white/80 text-sm leading-relaxed mb-2">
                                                 {transcript.text}
                                             </p>
+
+                                            {/* Show analysis if available */}
+                                            {transcript.analysis && (
+                                                <div className="mt-2 p-3 bg-[#803ceb]/10 rounded-lg border border-[#803ceb]/20">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <svg className="w-3 h-3 text-[#803ceb]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                        </svg>
+                                                        <span className="text-[#803ceb] text-xs font-semibold">AI Analysis</span>
+                                                    </div>
+                                                    <p className="text-white/70 text-xs mb-2">{transcript.analysis.summary}</p>
+                                                    {transcript.analysis.keywords && transcript.analysis.keywords.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {transcript.analysis.keywords.slice(0, 3).map((keyword, i) => (
+                                                                <span key={i} className="px-2 py-1 bg-[#803ceb]/20 rounded text-xs text-[#803ceb]">
+                                                                    {keyword}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Message type badge */}
+                                            <div className="flex justify-between items-center mt-2">
+                                                <span className="text-white/40 text-xs">
+                                                    {transcript.isFinal ? 'Final' : 'Interim'}
+                                                </span>
+                                                {transcript.messageType === 'enriched_transcript' && (
+                                                    <span className="px-2 py-1 bg-green-500/20 rounded text-xs text-green-400">
+                                                        Analyzed
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                     <div ref={transcriptsEndRef} />
