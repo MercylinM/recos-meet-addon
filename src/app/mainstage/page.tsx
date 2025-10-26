@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useState, useRef, useCallback, ReactNode } from 'react';
+import { useEffect, useState, useRef, useCallback, ReactNode, JSXElementConstructor, Key, ReactElement, ReactPortal } from 'react';
 import { meet } from '@googleworkspace/meet-addons/meet.addons';
 import { useTranscriptStream } from '../hooks/useTranscriptStream';
 import { AIOrb } from '../components/AIOrb';
@@ -326,7 +326,7 @@ export default function MainStage() {
                                                         <span className="text-green-400 font-semibold text-lg">Key Points</span>
                                                     </div>
                                                     <ul className="space-y-2">
-                                                        {analysis.keyPoints.map((point, i) => (
+                                                        {analysis.keyPoints.map((point: string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | ReactPortal | Promise<string | number | bigint | boolean | ReactPortal | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | null | undefined> | null | undefined, i: Key | null | undefined) => (
                                                             <li key={i} className="text-white/80 text-base flex items-start gap-3 bg-green-500/5 rounded-lg p-3 border border-green-500/10">
                                                                 <span className="text-green-400 font-bold mt-1">•</span>
                                                                 <span>{point}</span>
@@ -346,7 +346,7 @@ export default function MainStage() {
                                                         <span className="text-orange-400 font-semibold text-lg">Action Items</span>
                                                     </div>
                                                     <ul className="space-y-2">
-                                                        {analysis.actionItems.map((item, i) => (
+                                                        {analysis.actionItems.map((item: string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | ReactPortal | Promise<string | number | bigint | boolean | ReactPortal | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | null | undefined> | null | undefined, i: Key | null | undefined) => (
                                                             <li key={i} className="text-white/80 text-base flex items-start gap-3 bg-orange-500/5 rounded-lg p-3 border border-orange-500/10">
                                                                 <span className="text-orange-400 font-bold mt-1">•</span>
                                                                 <span>{item}</span>
