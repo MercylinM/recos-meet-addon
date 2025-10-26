@@ -13,10 +13,22 @@ import { useTranscriptStream } from '../hooks/useTranscriptStream';
 import { meet } from '@googleworkspace/meet-addons/meet.addons';
 import { Button } from '../components/Button';
 
+interface AnalysisData {
+  detected_question?: string;
+  candidate_answer_summary?: string;
+  semantics?: string;
+  questions?: string[];
+  confidence?: number;
+  keywords?: string[];
+  answer_quality?: 'excellent' | 'good' | 'fair' | 'poor' | 'unknown';
+  timestamp: number;
+}
+
 export default function SidePanel() {
   const [addonSession, setAddonSession] = useState<any>(null);
   const [sidePanelClient, setSidePanelClient] = useState<any>();
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
+  const [analyses, setAnalyses] = useState<AnalysisData[]>([]);
   const [meetingSession, setMeetingSession] = useState<MeetingSession | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>('Initializing...');
@@ -57,121 +69,81 @@ export default function SidePanel() {
     initializeAddon();
   }, []);
 
-  // const handleTranscriptReceived = useCallback((data: any) => {
-  //   console.log('📥 Received WebSocket message:', data);
-
-  //   // Handle analysis messages (Gemini insights)
-  //   if (data.type === 'analysis') {
-  //     console.log('Processing analysis data:', data);
-
-  //     const analysisTranscript: Transcript = {
-  //       speaker: data.speaker || 'AI Analysis',
-  //       text: data.candidate_answer || data.transcript || '',
-  //       analysis: {
-  //         summary: data.analysis?.candidate_answer_summary,
-  //         semantics: data.analysis?.semantics,
-  //         questions: data.analysis?.questions || [],
-  //         confidence: data.analysis?.confidence || 0,
-  //         keywords: data.analysis?.keywords || [],
-  //         answer_quality: data.analysis?.answer_quality,
-  //         detected_question: data.analysis?.detected_question
-  //       },
-  //       timestamp: data.timestamp || Date.now(),
-  //       isFinal: true,
-  //       messageType: 'analysis',
-  //       segmentLength: data.candidate_answer?.length || 0,
-  //       analysisTimestamp: Date.now(),
-  //       question: data.question,
-  //       interview_id: data.interview_id
-  //     };
-
-  //     setTranscripts((prev) => [...prev, analysisTranscript]);
-  //     return;
-  //   }
-
-  //   // Handle regular transcript messages
-  //   const newTranscript: Transcript = {
-  //     speaker: data.speaker_name || 'Unknown',
-  //     text: data.transcript,
-  //     analysis: data.analysis,
-  //     timestamp: data.timestamp || Date.now(),
-  //     isFinal: data.is_final || false,
-  //     messageType: data.message_type,
-  //     segmentLength: data.transcript?.length,
-  //     analysisTimestamp: data.analysis_timestamp
-  //   };
-
-  //   setTranscripts((prev) => {
-  //     if (data.message_type === 'interim_transcript') {
-  //       const otherTranscripts = prev.filter(t =>
-  //         !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
-  //       );
-  //       return [...otherTranscripts, newTranscript];
-  //     }
-
-  //     if (data.message_type === 'final_transcript' || data.message_type === 'enriched_transcript') {
-  //       const otherTranscripts = prev.filter(t =>
-  //         !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
-  //       );
-  //       return [...otherTranscripts, newTranscript];
-  //     }
-
-  //     return [...prev, newTranscript];
-  //   });
-  // }, []);
-
-  // In your SidePanel component, simplify the handleTranscriptReceived function:
   const handleTranscriptReceived = useCallback((data: any) => {
-    console.log('📥 RAW WebSocket data received:', data);
+    // Handle analysis messages (Gemini insights)
+    if (data.analysis) {
+      console.log('Processing analysis data:', data);
 
-    // Handle analysis messages
-    if (data.type === 'analysis') {
-      console.log('🎯 ANALYSIS DATA:', {
-        question: data.question,
-        candidate_answer: data.candidate_answer,
-        analysis: data.analysis
-      });
-
-      const analysisTranscript: Transcript = {
-        speaker: data.speaker || 'Candidate',
-        text: data.candidate_answer || 'No answer provided',
-        analysis: {
-          summary: data.analysis?.summary || 'No summary available',
-          semantics: data.analysis?.semantics || 'No semantic analysis',
-          questions: data.analysis?.questions || [],
-          confidence: data.analysis?.confidence || 0,
-          keywords: data.analysis?.keywords || [],
-          answer_quality: data.analysis?.answer_quality || 'unknown'
-        },
-        timestamp: Date.now(),
-        isFinal: true,
-        messageType: 'analysis',
-        question: data.question
+      const newAnalysis: AnalysisData = {
+        detected_question: data.analysis.detected_question || '',
+        candidate_answer_summary: data.analysis.candidate_answer_summary || 'No summary available',
+        semantics: data.analysis.semantics || 'No semantic analysis available',
+        questions: data.analysis.questions || [],
+        confidence: data.analysis.confidence || 0.8,
+        keywords: data.analysis.keywords || [],
+        answer_quality: data.analysis.answer_quality || 'unknown',
+        timestamp: data.timestamp || Date.now(),
       };
 
-      setTranscripts((prev) => [...prev, analysisTranscript]);
+      setAnalyses((prev) => [newAnalysis, ...prev]);
+
+      // If it's an enriched transcript, also add it to transcripts
+      if (data.transcript) {
+        const enrichedTranscript: Transcript = {
+          speaker: data.speaker_name || 'Unknown Speaker',
+          text: data.transcript,
+          analysis: data.analysis,
+          timestamp: data.timestamp || Date.now(),
+          isFinal: true,
+          messageType: 'enriched_transcript',
+          segmentLength: data.transcript?.length,
+          analysisTimestamp: data.analysis_timestamp
+        };
+        setTranscripts((prev) => {
+          const otherTranscripts = prev.filter(t =>
+            !(t.messageType === 'interim_transcript' && t.speaker === enrichedTranscript.speaker)
+          );
+          return [...otherTranscripts, enrichedTranscript];
+        });
+      }
       return;
     }
 
-    if (data.transcript) {
-      const newTranscript: Transcript = {
-        speaker: data.speaker_name || 'Unknown',
-        text: data.transcript,
-        timestamp: data.timestamp || Date.now(),
-        isFinal: data.is_final || false,
-        messageType: data.message_type
-      };
+    // Handle regular transcript messages
+    const newTranscript: Transcript = {
+      speaker: data.speaker_name || 'Unknown',
+      text: data.transcript,
+      analysis: data.analysis,
+      timestamp: data.timestamp || Date.now(),
+      isFinal: data.is_final || false,
+      messageType: data.message_type,
+      segmentLength: data.transcript?.length,
+      analysisTimestamp: data.analysis_timestamp
+    };
 
-      setTranscripts((prev) => [...prev, newTranscript]);
-    }
+    setTranscripts((prev) => {
+      if (data.message_type === 'interim_transcript') {
+        const otherTranscripts = prev.filter(t =>
+          !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
+        );
+        return [...otherTranscripts, newTranscript];
+      }
+
+      if (data.message_type === 'final_transcript' || data.message_type === 'enriched_transcript') {
+        const otherTranscripts = prev.filter(t =>
+          !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
+        );
+        return [...otherTranscripts, newTranscript];
+      }
+
+      return [...prev, newTranscript];
+    });
   }, []);
 
   const {
     isConnected,
     connectionStatus,
     lastMessageTime,
-    reconnectAttempts,
-    bytesReceived,
     connect,
     disconnect,
   } = useTranscriptStream(handleTranscriptReceived);
@@ -201,24 +173,6 @@ export default function SidePanel() {
     };
   }, [connect, disconnect]);
 
-  const checkBotStatus = async (): Promise<void> => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/bot/status`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setBotStatus(data.status || 'idle');
-        if (data.status === 'running' && data.start_time) {
-          setSessionStartTime(new Date(data.start_time).getTime());
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check bot status:', error);
-    }
-  };
 
   const clearTranscripts = (): void => {
     setTranscripts([]);
@@ -316,9 +270,7 @@ export default function SidePanel() {
                     Disconnect
                   </Button>
                 </div>
-                {/* <Button onClick={clearTranscripts} variant="secondary" className="w-full">
-                  Clear All
-                </Button> */}
+
                 {!isConnected && (
                   <p className="text-yellow-400 text-xs">
                     {connectionStatus}
@@ -374,12 +326,12 @@ export default function SidePanel() {
                   <>
                     <AIOrb isActive={true} size="w-16 h-16 mx-auto mb-4" />
                     <p className="mb-2">Listening for transcripts and AI analysis...</p>
-                    <p className="text-sm">Regular transcripts and AI insights will appear here as the meeting progresses.</p>
+                    {/* <p className="text-sm">Regular transcripts and AI insights will appear here as the meeting progresses.</p> */}
                   </>
                 ) : (
                   <>
                     <p className="mb-2">Connect to start receiving real-time insights</p>
-                    <p className="text-sm">Transcripts and AI analysis will appear here automatically.</p>
+                    {/* <p className="text-sm">Transcripts and AI analysis will appear here automatically.</p> */}
                   </>
                 )}
               </div>
@@ -390,7 +342,7 @@ export default function SidePanel() {
                 <TranscriptEntry
                   key={`${transcript.timestamp}-${index}`}
                   transcript={transcript}
-                  showSpeaker={false} 
+                  showSpeaker={false}
                 />
               ))}
             </div>
@@ -398,19 +350,6 @@ export default function SidePanel() {
             <div ref={transcriptsEndRef} />
           </div>
         </Card>
-
-        {/* Debug Info - Remove in production */}
-        {/* <Card title="Debug Info" className="mt-6">
-          <div className="space-y-2 text-sm">
-            <div>WebSocket ConnecteanscriConnected ? 'Connected' : 'Disconnected'</div>
-            <div>Connection Status: {connectionStatus}</div>
-            <div>Last Message: {lastMessageTime ? new Date(lastMessageTime).toLocaleTimeString() : 'Never'}</div>
-            <div>Reconnect Attempts: {reconnectAttempts}</div>
-            <div>Data Received: {formatBytes(bytesReceived)}</div>
-            <div>Transcript Count: {transcripts.length}</div>
-            <div>Analysis Messages: {transcripts.filter(t => t.messageType === 'analysis').length}</div>
-          </div>
-        </Card> */}
       </div>
     </div>
   );
