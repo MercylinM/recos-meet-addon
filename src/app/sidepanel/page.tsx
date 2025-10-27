@@ -27,6 +27,7 @@ interface AnalysisData {
 export default function SidePanel() {
   const [addonSession, setAddonSession] = useState<any>(null);
   const [sidePanelClient, setSidePanelClient] = useState<any>();
+  const [coDoingClient, setCoDoingClient] = useState<any>();
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   const [analyses, setAnalyses] = useState<AnalysisData[]>([]);
   const [meetingSession, setMeetingSession] = useState<MeetingSession | null>(null);
@@ -48,6 +49,21 @@ export default function SidePanel() {
 
         const client = await session.createSidePanelClient();
         setSidePanelClient(client);
+
+        const coDoingClient = await session.createCoDoingClient({
+            activityTitle: "Recos AI Analysis",
+            onCoDoingStateChanged: (coDoingState) => {
+                const state = JSON.parse(new TextDecoder().decode(coDoingState.bytes));
+                console.log("Sidepanel received state update:", state);
+                if (state.transcripts) {
+                    setTranscripts(state.transcripts);
+                }
+                if (state.analyses) {
+                    setAnalyses(state.analyses);
+                }
+            },
+        });
+        setCoDoingClient(coDoingClient);
 
         try {
           const info = await client.getMeetingInfo();
@@ -148,6 +164,24 @@ export default function SidePanel() {
     disconnect,
   } = useTranscriptStream(handleTranscriptReceived);
 
+  const broadcastState = useCallback(() => {
+    if (!coDoingClient) return;
+
+    const state = {
+      transcripts,
+      analyses,
+      isConnected,
+      connectionStatus,
+    };
+
+    coDoingClient.broadcastStateUpdate({ bytes: new TextEncoder().encode(JSON.stringify(state)) });
+    console.log("Broadcasted state update", state);
+  }, [coDoingClient, transcripts, analyses, isConnected, connectionStatus]);
+
+  useEffect(() => {
+    broadcastState();
+  }, [broadcastState]);
+
   useEffect(() => {
     transcriptsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcripts]);
@@ -189,10 +223,6 @@ export default function SidePanel() {
       const mainStageUrl = `${window.location.origin}/mainstage`;
       await sidePanelClient.startActivity({
         mainStageUrl: mainStageUrl,
-        additionalData: JSON.stringify({
-          timestamp: Date.now(),
-          transcripts: transcripts.slice(0, 10)
-        })
       });
       setStatus('Main stage opened for all participants');
       console.log('Main stage opened successfully');
