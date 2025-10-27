@@ -335,6 +335,29 @@ export default function SidePanel() {
           </Card>
         </div>
 
+        {/* AI Analysis */}
+        {analyses.length > 0 && (
+            <div className="mb-8">
+                <Card title="AI Insight" glowing={true}>
+                    <div className="text-white/90 text-sm leading-relaxed">
+                        {analyses[0].candidate_answer_summary || analyses[0].semantics}
+                    </div>
+                    {analyses[0].keywords && analyses[0].keywords.length > 0 && (
+                        <div className="mt-4">
+                            <h4 className="text-sm font-bold text-white/70 mb-2">Keywords</h4>
+                            <div className="flex flex-wrap gap-2">
+                                {analyses[0].keywords.map((keyword, i) => (
+                                    <span key={i} className="bg-purple-500/20 text-purple-300 text-xs font-medium px-2 py-1 rounded-full">
+                                        {keyword}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </Card>
+            </div>
+        )}
+
         {/* Transcripts and Analysis Stream */}
         <Card title="Real-time Transcripts & AI Insights" glowing={isConnected}>
           <div className="flex justify-between items-center mb-4">
