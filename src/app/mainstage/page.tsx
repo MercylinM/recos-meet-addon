@@ -3,7 +3,6 @@
 
 import { useEffect, useState, useRef, useCallback, ReactNode, JSXElementConstructor, Key, ReactElement, ReactPortal } from 'react';
 import { meet } from '@googleworkspace/meet-addons/meet.addons';
-import { useTranscriptStream } from '../hooks/useTranscriptStream';
 import { AIOrb } from '../components/AIOrb';
 import { formatDuration } from '../utils/formatters';
 
@@ -43,6 +42,8 @@ export default function MainStage() {
     const [sessionStartTime, setSessionStartTime] = useState<number>(Date.now());
     const transcriptsEndRef = useRef<HTMLDivElement>(null);
     const analysesEndRef = useRef<HTMLDivElement>(null);
+    const [isConnected, setIsConnected] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState('Initializing...');
 
     // Debug effects
     useEffect(() => {
@@ -59,8 +60,28 @@ export default function MainStage() {
                 const session = await meet.addon.createAddonSession({
                     cloudProjectNumber: process.env.NEXT_PUBLIC_CLOUD_PROJECT_NUMBER || '',
                 });
-                await session.createMainStageClient();
-                console.log('Main Stage initialized successfully');
+
+                await session.createCoDoingClient({
+                    activityTitle: "Recos AI Analysis",
+                    onCoDoingStateChanged: (coDoingState) => {
+                        const state = JSON.parse(new TextDecoder().decode(coDoingState.bytes));
+                        console.log("Mainstage received state update:", state);
+                        if (state.transcripts) {
+                            setTranscripts(state.transcripts);
+                        }
+                        if (state.analyses) {
+                            setAnalyses(state.analyses);
+                        }
+                        if (state.isConnected !== undefined) {
+                            setIsConnected(state.isConnected);
+                        }
+                        if (state.connectionStatus) {
+                            setConnectionStatus(state.connectionStatus);
+                        }
+                    },
+                });
+                console.log('Main Stage co-doing client initialized successfully');
+
             } catch (error) {
                 console.error('Failed to initialize Main Stage:', error);
             }
@@ -68,82 +89,6 @@ export default function MainStage() {
 
         initializeMainStage();
     }, []);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleTranscriptReceived = useCallback((data: any) => {
-        console.log('Received WebSocket data:', data);
-
-        // Handle regular transcripts (without analysis)
-        if (data.transcript && !data.analysis) {
-            const newTranscript: Transcript = {
-                speaker: data.speaker_name || 'Unknown Speaker',
-                text: data.transcript,
-                timestamp: data.timestamp || Date.now(),
-                isFinal: data.is_final || false,
-                messageType: data.message_type,
-                analysis: undefined
-            };
-
-            setTranscripts((prev) => {
-                if (data.message_type === 'final_transcript' || data.message_type === 'enriched_transcript') {
-                    const otherTranscripts = prev.filter(t =>
-                        !(t.messageType === 'interim_transcript' && t.speaker === newTranscript.speaker)
-                    );
-                    return [...otherTranscripts, newTranscript];
-                }
-                return [...prev, newTranscript];
-            });
-        }
-
-        // Handle analysis data (from enriched transcripts or direct analysis)
-        if (data.analysis) {
-            const analysisData = data.analysis;
-
-            const newAnalysis: Analysis = {
-                detected_question: analysisData.detected_question || '',
-                candidate_answer_summary: analysisData.candidate_answer_summary || 'No summary available',
-                semantics: analysisData.semantics || 'No semantic analysis available',
-                questions: analysisData.questions || [],
-                confidence: analysisData.confidence || 0.8,
-                keywords: analysisData.keywords || [],
-                answer_quality: analysisData.answer_quality || 'unknown',
-                timestamp: data.timestamp || Date.now(),
-                summary: analysisData.candidate_answer_summary || analysisData.semantics || 'No summary available',
-                keyPoints: analysisData.keywords || [],
-                actionItems: analysisData.questions || [],
-                sentiment: analysisData.answer_quality === 'excellent' || analysisData.answer_quality === 'good' ? 'positive' : analysisData.answer_quality === 'poor' ? 'negative' : 'neutral',
-            };
-
-            setAnalyses(prev => [newAnalysis, ...prev]);
-
-            // If this is an enriched transcript, also add it to transcripts with analysis
-            if (data.transcript) {
-                const enrichedTranscript: Transcript = {
-                    speaker: data.speaker_name || 'Unknown Speaker',
-                    text: data.transcript,
-                    timestamp: data.timestamp || Date.now(),
-                    isFinal: true,
-                    messageType: 'enriched_transcript',
-                    analysis: {
-                        summary: analysisData.candidate_answer_summary || analysisData.semantics || 'No summary available',
-                        keywords: analysisData.keywords || [],
-                        questions: analysisData.questions || [],
-                        semantics: analysisData.semantics || 'No semantic analysis available',
-                        confidence: analysisData.confidence || 0.8,
-                    }
-                };
-
-                setTranscripts(prev => {
-                    const otherTranscripts = prev.filter(t =>
-                        !(t.messageType === 'interim_transcript' && t.speaker === enrichedTranscript.speaker)
-                    );
-                    return [...otherTranscripts, enrichedTranscript];
-                });
-            }
-        }
-    }, []);
-
-    const { isConnected, connectionStatus } = useTranscriptStream(handleTranscriptReceived);
 
     useEffect(() => {
         transcriptsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
